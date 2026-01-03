@@ -1,0 +1,62 @@
+# RunPod Configuration File
+# ==========================
+# Configuration for RunPod training environment
+
+[GITHUB]
+# GitHub repository URL
+repo_url = https://github.com/Galjoentopper/bot2026
+
+# Branch to push models to
+branch = main
+
+# GitHub authentication
+# Set GITHUB_TOKEN environment variable or configure SSH keys
+# For HTTPS: export GITHUB_TOKEN=your_token_here
+# For SSH: Ensure ~/.ssh/id_rsa exists and is added to GitHub
+
+# Maximum file size to push (MB)
+# Set skip_large_files=true to enable size limit
+# Files larger than this will be skipped unless Git LFS is used
+max_file_size_mb = 100
+skip_large_files = false
+
+# Use Git LFS for large files (recommended for files > 100MB)
+# Note: Git LFS requires setup: git lfs install
+use_git_lfs = false
+
+[TRAINING]
+# Default dataset name
+# Can be overridden via command line: --dataset DATASET_NAME
+default_dataset = ADA-EUR_1H_20240101-20251231
+
+# Resume training from checkpoint
+resume = true
+
+# Training parameters (can be overridden in training_config.txt)
+# These are defaults if training_config.txt is not found
+
+[PATHS]
+# Project paths are auto-detected, but can be overridden here
+# workspace_path = /workspace
+# project_path = /workspace/bot2026
+
+[VALIDATION]
+# Pre-flight validation settings
+min_disk_space_gb = 10.0
+min_memory_gb = 8.0
+check_network = true
+check_gpu = true
+
+[CLEANUP]
+# Cleanup settings
+keep_last_checkpoints = 3
+keep_logs_days = 7
+auto_cleanup = false
+
+[LOGGING]
+# Logging settings
+log_level = INFO
+# Options: DEBUG, INFO, WARNING, ERROR
+log_to_file = true
+log_to_console = true
+

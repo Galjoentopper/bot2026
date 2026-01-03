@@ -17,43 +17,74 @@ print("STEP 1: Setting up paths...")
 print("=" * 60)
 
 # CONFIGURATION: Set your dataset name here
-DATASET_NAME = "ADA-EUR_1H_20240101-20251231"  # CHANGE THIS TO YOUR DATASET
+# Can be overridden via environment variable DATASET_NAME
+DATASET_NAME = os.environ.get('DATASET_NAME', "ADA-EUR_1H_20240101-20251231")
 
-# Find project path (RunPod uses /workspace for volumes)
-possible_paths = [
-    Path('/workspace/Bot 2026'),
-    Path('/workspace'),
-    Path('/runpod-volume/Bot 2026'),
-    Path('/data/Bot 2026'),
-    Path.cwd() / 'Bot 2026',
-    Path.cwd(),
-]
-
-PROJECT_PATH = None
-for path in possible_paths:
-    if path.exists():
-        # Check if it's the project root (has 'PPO approach' folder)
-        if (path / 'PPO approach').exists():
+# Use runpod_utils for path detection
+try:
+    # Add PPO approach to path first
+    current_dir = Path(__file__).parent
+    ppo_path = current_dir / 'PPO approach'
+    if ppo_path.exists():
+        sys.path.insert(0, str(ppo_path))
+    else:
+        # Try if we're already in PPO approach
+        if current_dir.name == 'PPO approach' or (current_dir / 'PPO approach').exists():
+            sys.path.insert(0, str(current_dir))
+    
+    from runpod_utils import get_project_path, setup_environment, get_datasets_path, get_ppo_path
+    from colab_utils import get_ppo_models_path, get_checkpoints_path
+    
+    # Setup environment
+    env_info = setup_environment(verbose=True)
+    PROJECT_PATH = env_info['project_path']
+    
+except ImportError:
+    # Fallback to manual path detection
+    print("⚠ runpod_utils not found, using fallback path detection")
+    possible_paths = [
+        Path('/workspace/bot2026'),
+        Path('/workspace/bot-2026'),
+        Path('/workspace/Bot 2026'),
+        Path('/workspace'),
+        Path('/runpod-volume/bot2026'),
+        Path('/data/bot2026'),
+        Path.cwd(),
+    ]
+    
+    PROJECT_PATH = None
+    for path in possible_paths:
+        if path.exists() and (path / 'PPO approach').exists():
             PROJECT_PATH = path
             break
-        # Or if we're already in the project root
-        elif path.name == 'Bot 2026' and (path / 'PPO approach').exists():
-            PROJECT_PATH = path
-            break
-
-# If not found, use current directory
-if PROJECT_PATH is None:
-    PROJECT_PATH = Path.cwd()
-    print(f"⚠ Using current directory: {PROJECT_PATH}")
-    if not (PROJECT_PATH / 'PPO approach').exists():
-        print("⚠ Warning: 'PPO approach' folder not found!")
-        print(f"   Current directory contents: {list(PROJECT_PATH.iterdir())}")
-
-# Add paths to sys.path
-if str(PROJECT_PATH) not in sys.path:
-    sys.path.insert(0, str(PROJECT_PATH))
-if str(PROJECT_PATH / 'PPO approach') not in sys.path:
-    sys.path.insert(0, str(PROJECT_PATH / 'PPO approach'))
+    
+    if PROJECT_PATH is None:
+        PROJECT_PATH = Path.cwd()
+        print(f"⚠ Using current directory: {PROJECT_PATH}")
+    
+    # Add paths to sys.path
+    if str(PROJECT_PATH) not in sys.path:
+        sys.path.insert(0, str(PROJECT_PATH))
+    if str(PROJECT_PATH / 'PPO approach') not in sys.path:
+        sys.path.insert(0, str(PROJECT_PATH / 'PPO approach'))
+    
+    # Import path functions
+    try:
+        from colab_utils import get_datasets_path, get_ppo_path, get_ppo_models_path, get_checkpoints_path
+    except ImportError:
+        # Define fallback functions
+        def get_datasets_path():
+            return PROJECT_PATH / 'datasets'
+        def get_ppo_path():
+            return PROJECT_PATH / 'PPO approach'
+        def get_ppo_models_path():
+            path = get_ppo_path() / 'models'
+            path.mkdir(parents=True, exist_ok=True)
+            return path
+        def get_checkpoints_path():
+            path = get_ppo_path() / 'checkpoints'
+            path.mkdir(parents=True, exist_ok=True)
+            return path
 
 # Change to project directory
 os.chdir(PROJECT_PATH)
@@ -69,17 +100,67 @@ print("\n" + "=" * 60)
 print("STEP 2: Verifying dependencies...")
 print("=" * 60)
 
-# Check TensorFlow
+# Check if requirements.txt exists and install from it
+requirements_file = PROJECT_PATH / 'requirements.txt'
+if requirements_file.exists():
+    print(f"✓ Found requirements.txt")
+    
+    # Check if packages are already installed
+    print("Checking installed packages...")
+    missing_packages = []
+    
+    # Read requirements.txt
+    with open(requirements_file, 'r') as f:
+        requirements = [line.strip() for line in f if line.strip() and not line.strip().startswith('#')]
+    
+    # Check key packages
+    key_packages = {
+        'tensorflow': 'tensorflow',
+        'torch': 'torch',
+        'stable_baselines3': 'stable-baselines3',
+        'pandas': 'pandas',
+        'numpy': 'numpy',
+        'sklearn': 'scikit-learn',
+        'gymnasium': 'gymnasium',
+    }
+    
+    for module_name, package_name in key_packages.items():
+        try:
+            mod = __import__(module_name)
+            version = getattr(mod, '__version__', 'unknown')
+            print(f"  ✓ {package_name}: {version}")
+        except ImportError:
+            missing_packages.append(package_name)
+            print(f"  ✗ {package_name}: not installed")
+    
+    # Install from requirements.txt if packages are missing
+    if missing_packages:
+        print(f"\n⚠ Missing {len(missing_packages)} package(s). Installing from requirements.txt...")
+        print("  This may take a while...")
+        
+        # Use pip cache if available
+        pip_cache_dir = os.environ.get('PIP_CACHE_DIR', '/workspace/.pip_cache' if os.path.exists('/workspace') else None)
+        pip_args = [sys.executable, "-m", "pip", "install", "-q"]
+        if pip_cache_dir:
+            pip_args.extend(["--cache-dir", pip_cache_dir])
+        pip_args.append("-r")
+        pip_args.append(str(requirements_file))
+        
+        subprocess.check_call(pip_args)
+        print("✓ Dependencies installed from requirements.txt")
+    else:
+        print("✓ All required packages are installed")
+else:
+    print("⚠ requirements.txt not found - skipping dependency installation")
+    print("  Please ensure all dependencies are installed manually")
+
+# Verify key packages are available
 try:
     import tensorflow as tf
     print(f"✓ TensorFlow: {tf.__version__}")
 except ImportError:
-    print("⚠ TensorFlow not found - installing...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "tensorflow>=2.13.0"])
-    import tensorflow as tf
-    print(f"✓ TensorFlow installed: {tf.__version__}")
+    print("⚠ TensorFlow not available")
 
-# Check PyTorch
 try:
     import torch
     print(f"✓ PyTorch: {torch.__version__}")
@@ -87,37 +168,13 @@ try:
     if torch.cuda.is_available():
         print(f"  CUDA version: {torch.version.cuda}")
 except ImportError:
-    print("⚠ PyTorch not found - installing...")
-    # Use CUDA 12.1 (compatible with 12.4)
-    subprocess.check_call([
-        sys.executable, "-m", "pip", "install", "-q",
-        "torch", "torchvision", "torchaudio",
-        "--index-url", "https://download.pytorch.org/whl/cu121"
-    ])
-    import torch
-    print(f"✓ PyTorch installed: {torch.__version__}")
+    print("⚠ PyTorch not available")
 
-# Check stable-baselines3
 try:
     import stable_baselines3
     print(f"✓ stable-baselines3: {stable_baselines3.__version__}")
 except ImportError:
-    print("⚠ stable-baselines3 not found - installing...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "stable-baselines3[extra]>=2.0.0"])
-    import stable_baselines3
-    print(f"✓ stable-baselines3 installed: {stable_baselines3.__version__}")
-
-# Install other dependencies if needed
-other_deps = ['pandas>=1.5.0', 'numpy>=1.23.0', 'scikit-learn>=1.2.0', 
-              'matplotlib>=3.6.0', 'tqdm>=4.65.0', 'gymnasium>=0.28.0', 
-              'tensorboard>=2.13.0']
-print("\nChecking other dependencies...")
-for dep in other_deps:
-    try:
-        __import__(dep.split('>=')[0].replace('-', '_'))
-    except ImportError:
-        print(f"  Installing {dep}...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", dep])
+    print("⚠ stable-baselines3 not available")
 
 # ============================================
 # STEP 3: Verify GPU
@@ -164,7 +221,7 @@ print("=" * 60)
 
 import pandas as pd
 
-datasets_path = PROJECT_PATH / 'datasets'
+datasets_path = get_datasets_path()
 if not datasets_path.exists():
     print(f"⚠ Datasets directory not found: {datasets_path}")
     print("  Creating directory...")
@@ -265,7 +322,7 @@ print("-" * 60)
 
 try:
     results = train_all_models(
-        datasets_dir=str(PROJECT_PATH / 'datasets'),
+        datasets_dir=str(get_datasets_path()),
         config=config,
         task='classification',
         models=['lstm', 'gru', 'bilstm', 'dlstm'],
@@ -386,7 +443,7 @@ print("STEP 7: Training PPO agent...")
 print("=" * 60)
 
 # Change to PPO approach directory
-ppo_path = PROJECT_PATH / 'PPO approach'
+ppo_path = get_ppo_path()
 os.chdir(ppo_path)
 sys.path.insert(0, str(ppo_path))
 
@@ -438,7 +495,6 @@ try:
         print("="*60)
         
         # Display training summary
-        from colab_utils import get_ppo_models_path, get_checkpoints_path
         final_model_path = get_ppo_models_path() / f"ppo_{ppo_config['models']['prediction_model']}_{DATASET_NAME}.zip"
         if final_model_path.exists():
             size_mb = final_model_path.stat().st_size / (1024 * 1024)
@@ -465,8 +521,125 @@ print("✓ TRAINING COMPLETE!")
 print("=" * 60)
 print(f"\nAll models saved to: {PROJECT_PATH}")
 print(f"  Prediction models: {PROJECT_PATH / 'models'}")
-print(f"  PPO models: {PROJECT_PATH / 'PPO approach' / 'ppo_models'}")
-print(f"  Checkpoints: {PROJECT_PATH / 'PPO approach' / 'checkpoints'}")
+print(f"  PPO models: {get_ppo_models_path()}")
+print(f"  Checkpoints: {get_checkpoints_path()}")
 print(f"  Results: {PROJECT_PATH / 'results'}")
 print("\n" + "=" * 60)
+
+# ============================================
+# STEP 8: Push Models to GitHub (Optional)
+# ============================================
+push_to_github = os.environ.get('RUNPOD_PUSH_TO_GITHUB', 'false').lower() == 'true'
+if push_to_github:
+    print("\n" + "=" * 60)
+    print("STEP 8: Pushing models to GitHub...")
+    print("=" * 60)
+    
+    try:
+        from runpod_github import push_models_to_github
+        
+        # Collect model files, datasets, scalers, and results
+        files_to_push = []
+        
+        # Prediction models
+        models_dir = PROJECT_PATH / 'models'
+        if models_dir.exists():
+            files_to_push.extend(models_dir.glob('*.keras'))
+            files_to_push.extend(models_dir.glob('*.h5'))
+            files_to_push.extend(models_dir.glob('*.hdf5'))
+        
+        # PPO models
+        ppo_models_dir = get_ppo_models_path()
+        if ppo_models_dir.exists():
+            files_to_push.extend(ppo_models_dir.glob('*.zip'))
+        
+        # Checkpoints
+        checkpoints_dir = get_checkpoints_path()
+        if checkpoints_dir.exists():
+            files_to_push.extend(checkpoints_dir.glob('**/*.zip'))
+        
+        # Scalers
+        scalers_dir = PROJECT_PATH / 'scalers'
+        if scalers_dir.exists():
+            files_to_push.extend(scalers_dir.glob('*.pkl'))
+            files_to_push.extend(scalers_dir.glob('**/*.pkl'))
+        
+        # Datasets (CSV files)
+        datasets_dir = get_datasets_path()
+        if datasets_dir.exists():
+            files_to_push.extend(datasets_dir.glob('*.csv'))
+        
+        # Results (plots, JSON files)
+        results_dir = PROJECT_PATH / 'results'
+        if results_dir.exists():
+            files_to_push.extend(results_dir.glob('*.png'))
+            files_to_push.extend(results_dir.glob('*.jpg'))
+            files_to_push.extend(results_dir.glob('*.json'))
+            files_to_push.extend(results_dir.glob('**/*.png'))
+            files_to_push.extend(results_dir.glob('**/*.jpg'))
+            files_to_push.extend(results_dir.glob('**/*.json'))
+        
+        # PPO results (in PPO approach/results/)
+        ppo_results_dir = PROJECT_PATH / 'PPO approach' / 'results'
+        if ppo_results_dir.exists():
+            files_to_push.extend(ppo_results_dir.glob('*.png'))
+            files_to_push.extend(ppo_results_dir.glob('*.jpg'))
+            files_to_push.extend(ppo_results_dir.glob('*.json'))
+            files_to_push.extend(ppo_results_dir.glob('**/*.png'))
+            files_to_push.extend(ppo_results_dir.glob('**/*.jpg'))
+            files_to_push.extend(ppo_results_dir.glob('**/*.json'))
+        
+        # Log files
+        logs_dir = PROJECT_PATH / 'logs'
+        if logs_dir.exists():
+            files_to_push.extend(logs_dir.glob('*.log'))
+            files_to_push.extend(logs_dir.glob('**/*.log'))
+            files_to_push.extend(logs_dir.glob('**/*.log.*'))
+            # TensorBoard event files
+            files_to_push.extend(logs_dir.glob('**/events.out.tfevents.*'))
+        
+        # PPO logs (in PPO approach/logs/)
+        ppo_logs_dir = PROJECT_PATH / 'PPO approach' / 'logs'
+        if ppo_logs_dir.exists():
+            files_to_push.extend(ppo_logs_dir.glob('*.log'))
+            files_to_push.extend(ppo_logs_dir.glob('**/*.log'))
+            files_to_push.extend(ppo_logs_dir.glob('**/*.log.*'))
+            # TensorBoard event files
+            files_to_push.extend(ppo_logs_dir.glob('**/events.out.tfevents.*'))
+        
+        # Other log files in root
+        for log_file in PROJECT_PATH.glob('*.log'):
+            files_to_push.append(log_file)
+        for log_file in PROJECT_PATH.glob('*.log.*'):
+            files_to_push.append(log_file)
+        for out_file in PROJECT_PATH.glob('*.out'):
+            files_to_push.append(out_file)
+        if (PROJECT_PATH / 'nohup.out').exists():
+            files_to_push.append(PROJECT_PATH / 'nohup.out')
+        
+        # Runs directory (if exists)
+        runs_dir = PROJECT_PATH / 'runs'
+        if runs_dir.exists():
+            files_to_push.extend(runs_dir.glob('**/*'))
+        
+        if files_to_push:
+            print(f"Found {len(files_to_push)} file(s) to push:")
+            print(f"  - Models: {len([f for f in files_to_push if f.suffix in ['.keras', '.h5', '.hdf5', '.zip']])}")
+            print(f"  - Datasets: {len([f for f in files_to_push if f.suffix == '.csv'])}")
+            print(f"  - Scalers: {len([f for f in files_to_push if f.suffix == '.pkl'])}")
+            print(f"  - Results: {len([f for f in files_to_push if f.suffix in ['.png', '.jpg', '.json']])}")
+            print(f"  - Logs: {len([f for f in files_to_push if '.log' in f.name or '.out' in f.name or 'events.out.tfevents' in f.name])}")
+            # Push all files without size restrictions
+            if push_models_to_github(PROJECT_PATH, files_to_push, skip_large_files=False):
+                print("✓ All files pushed to GitHub successfully")
+            else:
+                print("⚠ Failed to push files to GitHub")
+        else:
+            print("No files found to push")
+    except ImportError:
+        print("⚠ runpod_github.py not found - skipping GitHub push")
+    except Exception as e:
+        print(f"⚠ Error pushing to GitHub: {e}")
+else:
+    print("\n⚠ GitHub push disabled (set RUNPOD_PUSH_TO_GITHUB=true to enable)")
 

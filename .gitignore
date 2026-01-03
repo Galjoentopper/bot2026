@@ -5,40 +5,49 @@
 # ============================================
 # Large Data Files
 # ============================================
-# Exclude all CSV datasets (they're too large for git)
+# CSV datasets - ALLOWED (will be tracked and pushed to GitHub)
+# Note: Large CSV files may require Git LFS for better performance
+# Uncomment below if you want to exclude CSV files:
 #datasets/*.csv
 #datasets/**/*.csv
 
-# Keep dataset folder structure, just ignore CSV files
+# Keep dataset folder structure
 !datasets/.gitkeep
 
 # ============================================
 # Trained Models
 # ============================================
+# Models - ALLOWED (will be tracked and pushed to GitHub)
+# Note: Large model files may require Git LFS for better performance
+# Uncomment below if you want to exclude model files:
 # Prediction models (LSTM, GRU, BiLSTM, DLSTM)
-models/*.keras
-models/*.h5
-models/*.hdf5
-models/**/*.keras
-models/**/*.h5
-models/**/*.hdf5
+#models/*.keras
+#models/*.h5
+#models/*.hdf5
+#models/**/*.keras
+#models/**/*.h5
+#models/**/*.hdf5
 
 # PPO models and checkpoints
-PPO approach/ppo_models/*.zip
-PPO approach/ppo_models/**/*.zip
-PPO approach/checkpoints/**/*.zip
-PPO approach/checkpoints/**/*.pkl
+# Note: PPO models are saved to PPO approach/models/ (not ppo_models/)
+#PPO approach/models/*.zip
+#PPO approach/models/**/*.zip
+#PPO approach/checkpoints/**/*.zip
+#PPO approach/checkpoints/**/*.pkl
 
 # Keep model folder structure
 !models/.gitkeep
-!PPO approach/ppo_models/.gitkeep
+!PPO approach/models/.gitkeep
 !PPO approach/checkpoints/.gitkeep
 
 # ============================================
 # Scaler Files
 # ============================================
-scalers/*.pkl
-scalers/**/*.pkl
+# Scalers - ALLOWED (will be tracked and pushed to GitHub)
+# All scaler files (.pkl) will be committed and pushed
+# Uncomment below if you want to exclude scaler files:
+#scalers/*.pkl
+#scalers/**/*.pkl
 
 # Keep scaler folder structure
 !scalers/.gitkeep
@@ -46,20 +55,26 @@ scalers/**/*.pkl
 # ============================================
 # Training Results & Logs
 # ============================================
-# Training plots and results
-results/*.png
-results/*.jpg
-results/*.json
-results/**/*.png
-results/**/*.jpg
-results/**/*.json
+# Training plots and results - ALLOWED (will be tracked and pushed to GitHub)
+# All result files (.png, .jpg, .json) will be committed and pushed
+# Uncomment below if you want to exclude result files:
+#results/*.png
+#results/*.jpg
+#results/*.json
+#results/**/*.png
+#results/**/*.jpg
+#results/**/*.json
 
-# TensorBoard logs
-logs/
-runs/
-*.log
-training.log
-*.log.*
+# Log files - ALLOWED (will be tracked and pushed to GitHub)
+# All log files will be committed and pushed
+# Uncomment below if you want to exclude log files:
+#logs/
+#runs/
+#*.log
+#training.log
+#*.log.*
+#nohup.out
+#*.out
 
 # Keep results folder structure
 !results/.gitkeep
@@ -182,10 +197,11 @@ pdf/*.pdf
 # ============================================
 # RunPod Specific
 # ============================================
-# Training logs from RunPod
-training.log
-nohup.out
-*.out
+# Training logs from RunPod - ALLOWED (will be tracked and pushed to GitHub)
+# Uncomment below if you want to exclude RunPod log files:
+#training.log
+#nohup.out
+#*.out
 
 # ============================================
 # Keep Important Empty Folders

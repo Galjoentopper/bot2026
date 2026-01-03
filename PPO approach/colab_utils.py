@@ -8,6 +8,8 @@ When using the Colab VS Code Extension:
 2. Code executes on Google's Colab servers (with GPU)
 3. Local files are NOT accessible from Colab runtime
 4. You must sync your project to Google Drive for Colab to access it
+
+Also supports RunPod environment detection for unified path resolution.
 """
 
 import os
@@ -88,15 +90,77 @@ def mount_drive(force: bool = False) -> bool:
         return False
 
 
+def is_runpod_runtime() -> bool:
+    """
+    Detect if code is running on RunPod environment.
+    
+    Returns:
+        True if running on RunPod, False otherwise
+    """
+    # Check for /workspace mount (RunPod's persistent storage)
+    if os.path.exists('/workspace'):
+        # Additional check: look for RunPod-specific environment variables
+        if 'RUNPOD_POD_ID' in os.environ or 'RUNPOD_API_KEY' in os.environ:
+            return True
+        # If /workspace exists and we're not on Colab, likely RunPod
+        if not is_colab_runtime():
+            return True
+    
+    # Check for other RunPod mount points
+    if os.path.exists('/runpod-volume') or os.path.exists('/data'):
+        return True
+    
+    return False
+
+
 def get_project_path() -> Path:
     """
     Return project root based on environment.
+    Unified path resolution for RunPod, Colab, and local environments.
     
     Returns:
         Path to project root:
+        - RunPod: Searches in /workspace, /runpod-volume, /data
         - Colab: Searches for Bot 2026 folder in Drive
         - Local: Parent of 'PPO approach' folder
     """
+    # Check for RunPod first
+    if is_runpod_runtime():
+        # RunPod: Search in common mount points
+        possible_paths = [
+            Path('/workspace/bot2026'),           # Standard RunPod clone location
+            Path('/workspace/bot-2026'),          # Alternative naming
+            Path('/workspace/Bot 2026'),          # Colab-style naming
+            Path('/runpod-volume/bot2026'),
+            Path('/data/bot2026'),
+            Path.cwd(),                           # Current directory
+        ]
+        
+        for path in possible_paths:
+            if path.exists():
+                # Check if it's the project root (has 'PPO approach' folder)
+                if (path / 'PPO approach').exists():
+                    return path
+                # Also check if we're already in the project root
+                if path.name in ['bot2026', 'bot-2026', 'Bot 2026'] and (path / 'PPO approach').exists():
+                    return path
+        
+        # If not found, try to find it dynamically
+        workspace_root = Path('/workspace')
+        if workspace_root.exists():
+            # Search for project folder
+            for bot_folder in workspace_root.glob('**/PPO approach'):
+                if bot_folder.parent.is_dir():
+                    return bot_folder.parent
+        
+        # Fallback to current directory
+        current = Path.cwd()
+        if (current / 'PPO approach').exists():
+            return current
+        
+        # Last resort: assume /workspace/bot2026
+        return Path('/workspace/bot2026')
+    
     if is_colab_runtime():
         # Try multiple possible paths (user may have different Drive setups)
         # Note: Colab uses English paths internally, but we check variants
@@ -186,7 +250,7 @@ def setup_environment(verbose: bool = True) -> dict:
     One-call setup for notebook environment.
     
     This function:
-    1. Detects if running on Colab
+    1. Detects if running on Colab, RunPod, or local
     2. Mounts Google Drive if on Colab
     3. Adds project paths to sys.path
     4. Returns environment info
@@ -199,6 +263,7 @@ def setup_environment(verbose: bool = True) -> dict:
     """
     env_info = {
         'is_colab': is_colab_runtime(),
+        'is_runpod': is_runpod_runtime(),
         'project_path': None,
         'drive_mounted': False,
         'gpu_available': False,
@@ -210,7 +275,10 @@ def setup_environment(verbose: bool = True) -> dict:
         print("=" * 50)
     
     # Detect environment
-    if env_info['is_colab']:
+    if env_info['is_runpod']:
+        if verbose:
+            print("✓ Running on RunPod")
+    elif env_info['is_colab']:
         if verbose:
             print("✓ Running on Google Colab")
         
