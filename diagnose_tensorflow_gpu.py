@@ -155,8 +155,34 @@ def main():
             all_found = False
         print()
     
+    # Check library dependencies
+    print("4. Checking library dependencies...")
+    print()
+    import subprocess
+    
+    for lib_name, status in library_status.items():
+        if status.get('found'):
+            lib_path = status['path']
+            try:
+                # Use ldd to check dependencies
+                result = subprocess.run(
+                    ['ldd', lib_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    missing_deps = [line for line in result.stdout.split('\n') if 'not found' in line]
+                    if missing_deps:
+                        print(f"   ⚠ {lib_name} has missing dependencies:")
+                        for dep in missing_deps[:3]:  # Show first 3
+                            print(f"      {dep.strip()}")
+            except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
+                pass  # ldd might not be available or library might not be a shared object
+    print()
+    
     # Check TensorFlow GPU detection
-    print("4. Testing TensorFlow GPU detection...")
+    print("5. Testing TensorFlow GPU detection...")
     print()
     
     # Set LD_LIBRARY_PATH if needed
@@ -169,30 +195,56 @@ def main():
         print(f"   Set LD_LIBRARY_PATH: {os.environ['LD_LIBRARY_PATH']}")
         print()
     
+    # Try to get more detailed error messages
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'  # Enable all logs temporarily
+    
     try:
         import tensorflow as tf
         print(f"   TensorFlow version: {tf.__version__}")
         print(f"   Built with CUDA: {tf.test.is_built_with_cuda()}")
         print(f"   Built with GPU: {tf.test.is_built_with_gpu_support()}")
         
-        gpus = tf.config.list_physical_devices('GPU')
-        if gpus:
-            print(f"   ✓ GPU devices detected: {len(gpus)}")
-            for i, gpu in enumerate(gpus):
-                print(f"      GPU {i}: {gpu.name}")
+        # Try to get more info about GPU detection
+        try:
+            # Force GPU initialization
+            gpus = tf.config.list_physical_devices('GPU')
+            if gpus:
+                print(f"   ✓ GPU devices detected: {len(gpus)}")
+                for i, gpu in enumerate(gpus):
+                    print(f"      GPU {i}: {gpu.name}")
+                    try:
+                        details = tf.config.experimental.get_device_details(gpu)
+                        if details:
+                            print(f"         Details: {details}")
+                    except:
+                        pass
+            else:
+                print("   ✗ No GPU devices detected")
+                print("   ⚠ TensorFlow cannot find GPU libraries")
+                print()
+                print("   Attempting to identify the issue...")
+                # Try to access GPU info directly
                 try:
-                    details = tf.config.experimental.get_device_details(gpu)
-                    if details:
-                        print(f"         Details: {details}")
-                except:
-                    pass
-        else:
-            print("   ✗ No GPU devices detected")
-            print("   ⚠ TensorFlow cannot find GPU libraries")
+                    from tensorflow.python.client import device_lib
+                    local_devices = device_lib.list_local_devices()
+                    gpu_devices = [d for d in local_devices if d.device_type == 'GPU']
+                    if gpu_devices:
+                        print(f"   Found {len(gpu_devices)} GPU device(s) via device_lib:")
+                        for dev in gpu_devices:
+                            print(f"      {dev.name}")
+                    else:
+                        print("   No GPU devices found via device_lib")
+                except Exception as e:
+                    print(f"   Could not check device_lib: {e}")
+        except Exception as e:
+            print(f"   Error checking GPU: {e}")
     except ImportError:
         print("   ✗ TensorFlow not installed")
     except Exception as e:
         print(f"   ✗ Error importing TensorFlow: {e}")
+    finally:
+        # Restore log level
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
     print()
     
     # Summary and recommendations
@@ -202,7 +254,21 @@ def main():
     print()
     
     if all_found:
-        print("✓ All required libraries found")
+        print("✓ All required libraries found and can be loaded")
+        print()
+        print("⚠ However, TensorFlow still cannot detect GPU.")
+        print("   The 'Unable to register cuDNN factory' errors suggest:")
+        print("   - TensorFlow 2.15.0 may have been compiled with CuDNN 9.3.0")
+        print("   - RunPod has CuDNN 9.1.0 installed")
+        print("   - Version mismatch prevents GPU initialization")
+        print()
+        print("   Solutions to try:")
+        print("   1. Use CPU training (works but slower)")
+        print("   2. Disable CuDNN for RNNs: export TF_USE_CUDNN_RNN=0")
+        print("   3. Train on CPU but use PyTorch GPU for PPO (if applicable)")
+        print("   4. Check if TensorFlow can work with CuDNN 9.1.0 by setting:")
+        print("      export TF_FORCE_GPU_ALLOW_GROWTH=true")
+        print("      export TF_USE_CUDNN_RNN=0  # Disable CuDNN-optimized RNNs")
     else:
         print("⚠ Some required libraries are missing:")
         for lib_name, status in library_status.items():
@@ -223,7 +289,10 @@ def main():
     
     print()
     print("To fix LD_LIBRARY_PATH permanently, add to ~/.bashrc:")
-    print("export LD_LIBRARY_PATH=/usr/local/cuda-12.4/targets/x86_64-linux/lib:/usr/local/lib/python3.11/dist-packages/nvidia/cudnn/lib:/usr/local/lib/python3.11/dist-packages/nvidia/cuda_runtime/lib:/usr/local/lib/python3.11/dist-packages/nvidia/cublas/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH")
+    print("export LD_LIBRARY_PATH=/usr/local/cuda-12.4/targets/x86_64-linux/lib:/usr/local/cuda-12.4/targets/x86_64-linux/lib/stubs:/usr/local/cuda-12.4/lib64:/usr/local/lib/python3.11/dist-packages/nvidia/cudnn/lib:/usr/local/lib/python3.11/dist-packages/nvidia/cuda_runtime/lib:/usr/local/lib/python3.11/dist-packages/nvidia/cublas/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH")
+    print()
+    print("Note: If GPU detection still fails, training will use CPU automatically.")
+    print("      This is slower but functional. Consider using PyTorch for GPU training.")
     print()
 
 if __name__ == '__main__':
