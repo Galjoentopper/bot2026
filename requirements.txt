@@ -13,12 +13,8 @@ numpy>=1.21.0,<2.0.0
 # Machine Learning / Deep Learning
 # ==============================================
 
-# TensorFlow (for prediction models: LSTM, GRU, BiLSTM, DLSTM)
-# SUCCESS: tf-nightly works with CuDNN 9.1.0 and CUDA 12.4 on RunPod!
-# tf-nightly (2.21.0.dev) successfully detects GPU where stable versions failed
-# This is the latest development build with support for newer CuDNN versions
-tf-nightly  # GPU-enabled TensorFlow (compatible with CuDNN 9.1.0)
-# Note: If you need a stable version later, try tensorflow==2.16.1 or tensorflow==2.15.0.post1
+# TensorFlow removed - using PyTorch for all models
+# PyTorch provides full GPU acceleration without CuDNN version issues
 
 # Scikit-learn (for data preprocessing)
 scikit-learn>=1.2.0,<2.0.0
@@ -59,8 +55,8 @@ tqdm>=4.65.0,<5.0.0
 # Logging & Monitoring
 # ==============================================
 
-# TensorBoard (for training visualization)
-tensorboard>=2.13.0,<3.0.0
+# TensorBoard removed - PyTorch uses its own logging (optional: tensorboardX if needed)
+# tensorboard>=2.13.0,<3.0.0  # Not needed for PyTorch
 
 # System monitoring (optional, for runpod_main.py memory checks)
 psutil>=5.9.0,<6.0.0

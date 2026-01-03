@@ -3,8 +3,7 @@ Prediction Wrapper
 ==================
 Load trained prediction models (LSTM/GRU/BiLSTM/DLSTM) and generate features for PPO.
 
-This module wraps your existing TensorFlow/Keras models to use them as feature
-extractors for the PPO trading agent.
+This module wraps PyTorch models to use them as feature extractors for the PPO trading agent.
 """
 
 import os
@@ -16,12 +15,15 @@ from typing import Dict, List, Tuple, Optional, Union
 
 import numpy as np
 import pandas as pd
-
-# Suppress TensorFlow warnings
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+import torch
+import torch.nn as nn
 warnings.filterwarnings('ignore')
 
 from colab_utils import get_project_path, get_models_path, get_scalers_path, get_datasets_path
+
+# Import PyTorch models
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from pytorch_models import get_model as get_pytorch_model
 
 
 class PredictionModel:
@@ -96,35 +98,7 @@ class PredictionModel:
                     config.pop('quantization_config', None)
                     return super().from_config(config)
             
-            custom_objects = {'Dense': CompatibleDense}
-            
-            try:
-                # Try loading with custom_objects
-                self.model = keras.models.load_model(
-                    str(model_path), 
-                    compile=False,
-                    custom_objects=custom_objects
-                )
-            except Exception as e:
-                # If that fails, try without custom_objects (for newer models)
-                try:
-                    self.model = keras.models.load_model(str(model_path), compile=False)
-                except Exception as e2:
-                    print(f"  Error loading model: {e2}")
-                    raise
-            
-            self.model.compile(
-                optimizer='adam',
-                loss='sparse_categorical_crossentropy',
-                metrics=['accuracy']
-            )
-            
-            # Ensure model runs on GPU if available
-            if gpus:
-                # Model will automatically use GPU during inference
-                print(f"  Model configured for GPU inference")
-            
-            # Find and load scaler
+            # Load scaler first to get model architecture info
             scaler_pattern = f"scaler_{self.dataset_name}.pkl"
             scaler_path = scalers_path / scaler_pattern
             
@@ -154,6 +128,27 @@ class PredictionModel:
                 self.sequence_length = self.scaler_data.get('sequence_length', 60)
             else:
                 self.feature_scaler = self.scaler_data
+            
+            # Build model architecture (need to match training architecture)
+            input_shape = (self.sequence_length, len(self.feature_names) if self.feature_names else 26)
+            output_units = 3  # Classification: Fall, Stationary, Rise
+            
+            # Create model with same architecture as training
+            self.model = get_pytorch_model(
+                model_name=self.model_name,
+                input_shape=input_shape,
+                output_units=output_units,
+                units=256,  # Default from training
+                dropout=0.2,  # Default from training
+                task='classification'
+            )
+            
+            # Load model weights
+            self.model.load_state_dict(torch.load(str(model_path), map_location=device))
+            self.model.to(device)
+            self.model.eval()
+            
+            print(f"  Model configured for {'GPU' if torch.cuda.is_available() else 'CPU'} inference")
             
             self.loaded = True
             print(f"✓ Model {self.model_name} loaded successfully")
@@ -190,10 +185,20 @@ class PredictionModel:
         # This is critical: prediction models on CPU during env steps = more GPU for PPO
         # Environment steps are CPU-bound anyway, so CPU inference is fine
         # PPO training will use GPU exclusively, maximizing GPU utilization
-        import tensorflow as tf
-        with tf.device('/CPU:0'):  # Force CPU for env steps - free GPU for PPO
-            # Use batch_size=1 for minimal memory during env steps
-            probs = self.model.predict(sequence, verbose=0, batch_size=1)
+        device = torch.device('cpu')  # Force CPU for env steps - free GPU for PPO
+        
+        # Convert to tensor
+        sequence_tensor = torch.FloatTensor(sequence).to(device)
+        
+        # Move model to CPU temporarily for inference
+        original_device = next(self.model.parameters()).device
+        self.model.to(device)
+        
+        with torch.no_grad():
+            probs = self.model(sequence_tensor).cpu().numpy()
+        
+        # Move model back to original device
+        self.model.to(original_device)
         
         if len(probs.shape) > 1:
             probs = probs[0]  # Get first batch item

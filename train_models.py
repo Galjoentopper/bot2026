@@ -35,130 +35,32 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-
-# Suppress TensorFlow warnings
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-# CuDNN for RNNs: TensorFlow 2.15.0 should work with CuDNN 9.1.0
-# If you still get errors, set TF_USE_CUDNN_RNN=0 to disable
-# For TensorFlow 2.16+, you may need CuDNN 9.3.0+
+import torch
+import torch.nn as nn
 warnings.filterwarnings('ignore')
 
-import tensorflow as tf
-import keras
-from keras.models import Model, Sequential
+# Import PyTorch models and training utilities
+from pytorch_models import get_model as get_pytorch_model
+from pytorch_train import train_model as pytorch_train_model, get_device, save_model as pytorch_save_model
 
 # ============================================================================
-# GPU Configuration for Maximum Utilization
+# GPU Configuration
 # ============================================================================
 
 def configure_gpu():
-    """Configure TensorFlow for optimal GPU utilization."""
-    # Check for GPU availability
-    gpus = tf.config.list_physical_devices('GPU')
-    
-    if not gpus:
-        print("⚠️  No GPU detected. Training will use CPU.")
-        print("   💡 In Google Colab: Runtime > Change runtime type > Hardware accelerator > GPU")
-        return False
-    
-    print(f"✅ Found {len(gpus)} GPU(s)")
-    
-    # Check CuDNN compatibility
-    # TensorFlow 2.20+ requires CuDNN 9.3.0+, but many systems have 9.1.0
-    # If mismatch detected, disable CuDNN for RNN operations
-    try:
-        # Try to detect CuDNN version mismatch
-        # This is a heuristic - if CuDNN fails, we'll catch it during training
-        cudnn_enabled = os.environ.get('TF_USE_CUDNN_RNN', '1')
-        if cudnn_enabled == '0':
-            print("⚠️  CuDNN for RNNs disabled via TF_USE_CUDNN_RNN=0")
-            print("   Using standard RNN implementation (slower but compatible)")
-        else:
-            print("ℹ️  CuDNN for RNNs enabled (will auto-fallback if version mismatch)")
-    except:
-        pass
-    
-    try:
-        # Enable memory growth to prevent TensorFlow from allocating all GPU memory
-        # This allows TensorFlow to allocate memory as needed
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-        
-        # Set mixed precision policy for faster training (if supported)
-        # This can provide 2-3x speedup on modern GPUs
-        try:
-            policy = tf.keras.mixed_precision.Policy('mixed_float16')
-            tf.keras.mixed_precision.set_global_policy(policy)
-            print("✅ Mixed precision training enabled (float16) - ~2-3x speedup")
-        except Exception as e:
-            print(f"⚠️  Mixed precision not available: {e}")
-        
-        # Enable XLA (Accelerated Linear Algebra) for faster execution
-        # XLA compiles operations for better GPU utilization
-        # NOTE: Disabled by default due to CuDNN version compatibility issues
-        # Uncomment below if you have matching CuDNN versions
-        try:
-            # Check CuDNN version compatibility first
-            # XLA requires matching CuDNN versions, so we disable it to avoid errors
-            # tf.config.optimizer.set_jit(True)
-            # print("✅ XLA JIT compilation enabled - better GPU utilization")
-            print("⚠️  XLA JIT compilation disabled - using standard execution (CuDNN compatibility)")
-        except Exception as e:
-            print(f"⚠️  XLA not available: {e}")
-        
-        # Additional GPU optimizations
-        try:
-            # Enable cuDNN auto-tuning for optimal performance
-            # This allows cuDNN to find the fastest algorithms
-            os.environ['TF_CUDNN_USE_AUTOTUNE'] = '1'
-            
-            # Enable TensorFloat-32 (TF32) for faster training on Ampere+ GPUs
-            # Provides ~1.2x speedup with minimal accuracy loss
-            tf.config.experimental.enable_tensor_float_32_execution(True)
-            print("✅ TensorFloat-32 (TF32) enabled - faster training on modern GPUs")
-        except Exception as e:
-            # TF32 not available on older GPUs or TensorFlow versions
-            pass
-        
-        # Set GPU device
-        tf.config.set_visible_devices(gpus[0], 'GPU')
-        print(f"✅ Using GPU: {gpus[0].name}")
-        
-        # Print GPU info
-        for i, gpu in enumerate(gpus):
-            print(f"  GPU {i}: {gpu.name}")
-            try:
-                details = tf.config.experimental.get_device_details(gpu)
-                if details:
-                    print(f"    Compute Capability: {details.get('compute_capability', 'Unknown')}")
-            except:
-                pass
-        
-        # Print memory info if available
-        try:
-            gpu_details = tf.config.experimental.get_device_details(gpus[0])
-            if gpu_details:
-                device_name = gpu_details.get('device_name', 'Unknown')
-                print(f"    Device: {device_name}")
-        except:
-            pass
-        
+    """Configure PyTorch for optimal GPU utilization."""
+    if torch.cuda.is_available():
+        print(f"✅ Found {torch.cuda.device_count()} GPU(s)")
+        for i in range(torch.cuda.device_count()):
+            print(f"  GPU {i}: {torch.cuda.get_device_name(i)}")
+            print(f"    GPU Memory: {torch.cuda.get_device_properties(i).total_memory / 1e9:.2f} GB")
         return True
-        
-    except RuntimeError as e:
-        print(f"⚠️  GPU configuration error: {e}")
-        print("   💡 Try restarting the runtime in Colab")
+    else:
+        print("⚠️  No GPU detected. Training will use CPU.")
         return False
 
 # Configure GPU at import time
 GPU_AVAILABLE = configure_gpu()
-from keras.layers import (
-    Input, LSTM, GRU, Bidirectional, Dense, Dropout,
-    Subtract, Add, Lambda, Concatenate, Layer,
-    AvgPool1D, ZeroPadding1D
-)
-from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
-from keras.optimizers import Adam
 
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import (
@@ -531,144 +433,19 @@ def prepare_data(df: pd.DataFrame, config: ConfigParser,
 
 
 # ============================================================================
-# Model Architectures
+# Model Architectures (PyTorch)
 # ============================================================================
 
-def build_lstm_model(input_shape: Tuple, output_units: int = 1, 
-                     units: int = 100, dropout: float = 0.2,
-                     task: str = 'regression') -> Model:
-    """Build LSTM model."""
-    # TensorFlow 2.15.0 should work with CuDNN 9.1.0
-    # Use CuDNN (implementation=2) for optimal performance, fallback to standard (1) if needed
-    # The implementation parameter is deprecated in TF 2.15+, but we keep it for compatibility
-    # If CuDNN fails, TensorFlow will auto-fallback to standard implementation
-    model = Sequential([
-        LSTM(units, return_sequences=True, input_shape=input_shape),
-        Dropout(dropout),
-        LSTM(units, return_sequences=False),
-        Dropout(dropout),
-    ])
-    
-    if task == 'classification':
-        # Use float32 for output layer when using mixed precision
-        output_layer = Dense(output_units, activation='softmax', dtype='float32')
-        model.add(output_layer)
-    else:
-        output_layer = Dense(output_units, activation='linear', dtype='float32')
-        model.add(output_layer)
-    
-    return model
-
-
-def build_gru_model(input_shape: Tuple, output_units: int = 1,
-                    units: int = 100, dropout: float = 0.2,
-                    task: str = 'regression') -> Model:
-    """Build GRU model."""
-    # TensorFlow 2.15.0 should work with CuDNN 9.1.0
-    model = Sequential([
-        GRU(units, return_sequences=True, input_shape=input_shape),
-        Dropout(dropout),
-        GRU(units, return_sequences=False),
-        Dropout(dropout),
-    ])
-    
-    if task == 'classification':
-        output_layer = Dense(output_units, activation='softmax', dtype='float32')
-        model.add(output_layer)
-    else:
-        output_layer = Dense(output_units, activation='linear', dtype='float32')
-        model.add(output_layer)
-    
-    return model
-
-
-def build_bilstm_model(input_shape: Tuple, output_units: int = 1,
-                       units: int = 100, dropout: float = 0.2,
-                       task: str = 'regression') -> Model:
-    """Build Bidirectional LSTM model."""
-    # TensorFlow 2.15.0 should work with CuDNN 9.1.0
-    model = Sequential([
-        Bidirectional(LSTM(units, return_sequences=True), input_shape=input_shape),
-        Dropout(dropout),
-        Bidirectional(LSTM(units, return_sequences=False)),
-        Dropout(dropout),
-    ])
-    
-    if task == 'classification':
-        output_layer = Dense(output_units, activation='softmax', dtype='float32')
-        model.add(output_layer)
-    else:
-        output_layer = Dense(output_units, activation='linear', dtype='float32')
-        model.add(output_layer)
-    
-    return model
-
-
-def build_dlstm_model(input_shape: Tuple, output_units: int = 1,
-                      units: int = 100, dropout: float = 0.2,
-                      task: str = 'regression', 
-                      ma_window: int = 10) -> Model:
-    """
-    Build DLSTM (Decomposition LSTM) model.
-    
-    Based on Imperial College paper - best trading profitability.
-    Uses proper time series decomposition: Trend (AvgPool) + Remainder
-    
-    Key insight: Decomposing the series allows the model to learn
-    different patterns from smooth trends vs volatile residuals.
-    
-    Architecture matches Imperial College paper:
-    - Trend extraction using AvgPool1D (not Conv1D)
-    - Full units (100) for both trend and remainder branches
-    - Simple Add fusion (no extra Dense layers)
-    """
-    inputs = Input(shape=input_shape)
-    
-    # Trend extraction using Average Pooling (as per Imperial College paper)
-    # AvgPool1D with padding='same' maintains sequence length
-    trend = AvgPool1D(pool_size=ma_window, strides=1, padding='same')(inputs)
-    
-    # Remainder: Original - Trend
-    remainder = Subtract()([inputs, trend])
-    
-    # LSTM on Trend (captures long-term patterns)
-    # Use full units (100) as per research paper
-    # TensorFlow 2.15.0 should work with CuDNN 9.1.0
-    trend_lstm = LSTM(units, return_sequences=True, name='trend_lstm_1')(trend)
-    trend_lstm = Dropout(dropout)(trend_lstm)
-    trend_lstm = LSTM(units, return_sequences=False, name='trend_lstm_2')(trend_lstm)
-    trend_lstm = Dropout(dropout)(trend_lstm)
-    
-    # LSTM on Remainder (captures short-term fluctuations)
-    # Use full units (100) as per research paper
-    remainder_lstm = LSTM(units, return_sequences=True, name='remainder_lstm_1')(remainder)
-    remainder_lstm = Dropout(dropout)(remainder_lstm)
-    remainder_lstm = LSTM(units, return_sequences=False, name='remainder_lstm_2')(remainder_lstm)
-    remainder_lstm = Dropout(dropout)(remainder_lstm)
-    
-    # Merge hidden states (simple additive fusion as per paper)
-    merged = Add()([trend_lstm, remainder_lstm])
-    
-    # Output layer (direct connection, no extra Dense layers)
-    # Use float32 for output layer when using mixed precision
-    if task == 'classification':
-        outputs = Dense(output_units, activation='softmax', dtype='float32')(merged)
-    else:
-        outputs = Dense(output_units, activation='linear', dtype='float32')(merged)
-    
-    model = Model(inputs=inputs, outputs=outputs, name='DLSTM')
-    return model
-
-
 def get_model(model_name: str, input_shape: Tuple, output_units: int,
-              config: ConfigParser, task: str = 'regression') -> Model:
-    """Get model by name."""
+              config: ConfigParser, task: str = 'regression') -> nn.Module:
+    """Get PyTorch model by name."""
     units = config.getint('MODEL', 'units')
     dropout = config.getfloat('MODEL', 'dropout')
     
     if model_name.lower() == 'dlstm':
         ma_window = config.getint('DLSTM', 'moving_average_window')
-        return build_dlstm_model(
+        return get_pytorch_model(
+            model_name=model_name,
             input_shape=input_shape,
             output_units=output_units,
             units=units,
@@ -677,16 +454,8 @@ def get_model(model_name: str, input_shape: Tuple, output_units: int,
             ma_window=ma_window
         )
     
-    builders = {
-        'lstm': build_lstm_model,
-        'gru': build_gru_model,
-        'bilstm': build_bilstm_model,
-    }
-    
-    if model_name.lower() not in builders:
-        raise ValueError(f"Unknown model: {model_name}. Available: lstm, gru, bilstm, dlstm")
-    
-    return builders[model_name.lower()](
+    return get_pytorch_model(
+        model_name=model_name,
         input_shape=input_shape,
         output_units=output_units,
         units=units,
@@ -696,271 +465,121 @@ def get_model(model_name: str, input_shape: Tuple, output_units: int,
 
 
 # ============================================================================
-# Training
+# Training (PyTorch)
 # ============================================================================
 
-def compile_model(model: Model, config: ConfigParser, task: str = 'regression'):
-    """Compile model with appropriate loss and optimizer."""
-    learning_rate = config.getfloat('MODEL', 'learning_rate')
-    optimizer = Adam(learning_rate=learning_rate)
-    
-    if task == 'classification':
-        loss = 'sparse_categorical_crossentropy'
-        metrics = ['accuracy']
-    else:
-        loss = 'mse'
-        metrics = ['mae']
-    
-    # Compile with XLA JIT for MAXIMUM GPU performance (if available)
-    # This enables just-in-time compilation for faster execution
-    compile_kwargs = {
-        'optimizer': optimizer,
-        'loss': loss,
-        'metrics': metrics
-    }
-    
-    # Add jit_compile for XLA optimization (TF 2.7+)
-    # NOTE: Disabled due to CuDNN version compatibility issues
-    # Uncomment below if you have matching CuDNN versions
-    if GPU_AVAILABLE:
-        try:
-            # XLA JIT compilation can provide 10-30% speedup
-            # But requires matching CuDNN versions (compiled vs runtime)
-            # compile_kwargs['jit_compile'] = True
-            pass
-        except TypeError:
-            # jit_compile not available in older TF versions
-            pass
-    
-    model.compile(**compile_kwargs)
-
-
-def create_tf_dataset(X: np.ndarray, y: np.ndarray, batch_size: int, 
-                      shuffle: bool = True, buffer_size: int = None) -> tf.data.Dataset:
-    """Create optimized TensorFlow dataset for MAXIMUM GPU utilization."""
-    if buffer_size is None:
-        # Optimize buffer size: use min of dataset size or 10k for shuffle efficiency
-        buffer_size = min(len(X), 10000) if shuffle else 1
-    
-    dataset = tf.data.Dataset.from_tensor_slices((X, y))
-    
-    # Cache first (before shuffle) if dataset fits in memory - MAJOR speedup
-    # Increased threshold for caching (more aggressive caching)
-    if len(X) < 500000:  # Cache if less than 500k samples (was 100k)
-        dataset = dataset.cache()
-        print(f"  💾 Dataset cached in memory ({len(X)} samples) - faster training")
-    
-    if shuffle:
-        dataset = dataset.shuffle(buffer_size=buffer_size, reshuffle_each_iteration=True)
-    
-    # Batch with optimized settings
-    dataset = dataset.batch(batch_size, drop_remainder=False)
-    
-    # Aggressive prefetching for MAXIMUM GPU utilization
-    # Prefetch multiple batches to keep GPU busy
-    try:
-        # Use AUTOTUNE for optimal prefetch size
-        prefetch_size = tf.data.AUTOTUNE
-    except AttributeError:
-        # Fallback: prefetch 2-4 batches
-        prefetch_size = min(4, max(2, 1024 // batch_size)) if batch_size > 0 else 2
-    
-    dataset = dataset.prefetch(prefetch_size)
-    
-    # Enable parallel processing for data transformations (if available)
-    try:
-        # Use num_parallel_calls for any map operations (none here, but ready for future)
-        pass
-    except:
-        pass
-    
-    return dataset
-
-
-def train_model(model: Model, X_train: np.ndarray, y_train: np.ndarray,
+def train_model(model: nn.Module, X_train: np.ndarray, y_train: np.ndarray,
                 config: ConfigParser, model_path: str = None,
-                class_weights: Dict = None) -> Dict:
-    """Train model with early stopping and checkpointing."""
-    batch_size = config.getint('TRAINING', 'batch_size')
-    epochs = config.getint('TRAINING', 'epochs')
-    patience = config.getint('TRAINING', 'early_stopping_patience')
+                class_weights: Dict = None, task: str = 'regression') -> Dict:
+    """Train PyTorch model with early stopping and checkpointing."""
+    # Use PyTorch training function
     validation_split = config.getfloat('TRAINING', 'validation_split')
-    
-    # Calculate training size first to determine optimal batch size
     train_size = int(len(X_train) * (1 - validation_split))
+    
+    # Split validation set
+    X_val = X_train[train_size:]
+    y_val = y_train[train_size:]
     X_train_split = X_train[:train_size]
     y_train_split = y_train[:train_size]
-    X_val_split = X_train[train_size:]
-    y_val_split = y_train[train_size:]
     
-    # Increase batch size for GPU if available - TARGET: 95% GPU utilization (~14GB/15GB)
-    # BUT: Ensure we have at least 50-100 steps per epoch for stable training
-    # Too few steps per epoch = poor learning and unstable gradients
-    min_steps_per_epoch = 50  # Minimum steps for stable training
-    max_steps_per_epoch = 200  # Maximum steps (beyond this, increase batch size)
-    
-    if GPU_AVAILABLE:
-        # Calculate what batch size would give us good steps per epoch
-        # Target: 50-100 steps per epoch for optimal balance
-        target_steps = 75  # Sweet spot for training stability
-        optimal_batch_for_steps = max(32, train_size // target_steps)
-        
-        # Now try to increase batch size for GPU, but respect minimum steps requirement
-        if batch_size < 512:
-            # Auto-adjust batch size for MAXIMUM GPU utilization (target: 95%)
-            # But don't exceed what would give us < min_steps_per_epoch
-            proposed_batch_size = min(1536, max(512, batch_size * 4))
-            # Cap at batch size that gives us at least min_steps_per_epoch
-            max_batch_for_min_steps = train_size // min_steps_per_epoch
-            optimal_batch_size = min(proposed_batch_size, max_batch_for_min_steps)
-            
-            if optimal_batch_size > batch_size:
-                steps_per_epoch = train_size // optimal_batch_size
-                print(f"  📈 GPU detected: Increasing batch size from {batch_size} to {optimal_batch_size}")
-                print(f"     This gives {steps_per_epoch} steps per epoch (target: {target_steps}, min: {min_steps_per_epoch})")
-                batch_size = optimal_batch_size
-            else:
-                steps_per_epoch = train_size // batch_size
-                print(f"  📈 GPU detected: Batch size {batch_size} gives {steps_per_epoch} steps per epoch")
-                print(f"     (Limited by dataset size to maintain {min_steps_per_epoch}+ steps per epoch)")
-        elif batch_size < 1024:
-            # Check if we can increase further without dropping below min_steps
-            max_batch_for_min_steps = train_size // min_steps_per_epoch
-            if batch_size < max_batch_for_min_steps:
-                proposed_batch_size = min(1536, batch_size * 2)
-                optimal_batch_size = min(proposed_batch_size, max_batch_for_min_steps)
-                steps_per_epoch = train_size // optimal_batch_size
-                print(f"  📈 GPU detected: Increasing batch size from {batch_size} to {optimal_batch_size}")
-                print(f"     This gives {steps_per_epoch} steps per epoch")
-                batch_size = optimal_batch_size
-            else:
-                steps_per_epoch = train_size // batch_size
-                print(f"  📈 GPU detected: Batch size {batch_size} gives {steps_per_epoch} steps per epoch")
-                print(f"     (At maximum for dataset size to maintain {min_steps_per_epoch}+ steps per epoch)")
-        else:
-            steps_per_epoch = train_size // batch_size
-            if steps_per_epoch < min_steps_per_epoch:
-                # Batch size too large! Reduce it
-                optimal_batch_size = train_size // min_steps_per_epoch
-                print(f"  ⚠️  Batch size {batch_size} too large (only {steps_per_epoch} steps per epoch)")
-                print(f"     Reducing to {optimal_batch_size} for {min_steps_per_epoch} steps per epoch")
-                batch_size = optimal_batch_size
-                steps_per_epoch = train_size // batch_size
-            print(f"  📈 GPU detected: Using batch size {batch_size} ({steps_per_epoch} steps per epoch)")
-    else:
-        steps_per_epoch = train_size // batch_size
-        print(f"  📊 Using batch size {batch_size} ({steps_per_epoch} steps per epoch)")
-    
-    # Convert to TensorFlow datasets for better GPU utilization
-    print("  🔄 Creating optimized TensorFlow datasets...")
-    
-    train_dataset = create_tf_dataset(X_train_split, y_train_split, batch_size, shuffle=True)
-    val_dataset = create_tf_dataset(X_val_split, y_val_split, batch_size, shuffle=False)
-    
-    callbacks = [
-        EarlyStopping(
-            monitor='val_loss',
-            patience=patience,
-            restore_best_weights=True,
-            verbose=1
-        ),
-        ReduceLROnPlateau(
-            monitor='val_loss',
-            factor=0.5,
-            patience=patience // 2,
-            min_lr=1e-7,
-            verbose=1
-        )
-    ]
-    
-    if model_path:
-        callbacks.append(
-            ModelCheckpoint(
-                model_path,
-                monitor='val_loss',
-                save_best_only=True,
-                verbose=0
-            )
-        )
-    
-    # Use dataset API for better GPU utilization
-    # Recalculate to ensure accuracy (should match what we calculated above)
-    steps_per_epoch = len(X_train_split) // batch_size
-    validation_steps = len(X_val_split) // batch_size if len(X_val_split) > 0 else None
-    
-    print(f"  🚀 Training with batch size: {batch_size}, steps per epoch: {steps_per_epoch}")
-    if steps_per_epoch < 20:
-        print(f"  ⚠️  WARNING: Very few steps per epoch ({steps_per_epoch}). Consider:")
-        print(f"     - Using a larger dataset")
-        print(f"     - Reducing batch size in training_config.txt")
-        print(f"     - Or the model may not train effectively")
-    
-    # Optimize fit() for MAXIMUM GPU utilization
-    # All optimizations are already in place via dataset and model compilation
-    history = model.fit(
-        train_dataset,
-        batch_size=None,  # Batch size is handled by dataset (optimized)
-        epochs=epochs,
-        validation_data=val_dataset,
-        validation_steps=validation_steps,
-        steps_per_epoch=steps_per_epoch,
-        callbacks=callbacks,
-        class_weight=class_weights,
-        verbose=1
-        # Note: XLA JIT, mixed precision, and dataset optimizations already enabled
+    # Train using PyTorch training utilities
+    history = pytorch_train_model(
+        model=model,
+        X_train=X_train_split,
+        y_train=y_train_split,
+        config=config,
+        model_path=model_path,
+        class_weights=class_weights,
+        X_val=X_val,
+        y_val=y_val,
+        task=task
     )
     
-    return history.history
+    return history
+
+
+# ============================================================================
+# Prediction Utilities
+# ============================================================================
+
+def predict_model(model: nn.Module, X: np.ndarray, batch_size: int = 1024, 
+                  task: str = 'regression') -> np.ndarray:
+    """Make predictions with PyTorch model."""
+    device = get_device()
+    model.eval()
+    
+    # Convert to tensor
+    X_tensor = torch.FloatTensor(X).to(device)
+    
+    predictions = []
+    
+    with torch.no_grad():
+        for i in range(0, len(X), batch_size):
+            batch_X = X_tensor[i:i+batch_size]
+            batch_pred = model(batch_X)
+            
+            if task == 'classification':
+                # Get probabilities
+                predictions.append(batch_pred.cpu().numpy())
+            else:
+                # Get regression values
+                predictions.append(batch_pred.cpu().numpy())
+    
+    predictions = np.concatenate(predictions, axis=0)
+    
+    if task == 'classification':
+        return predictions  # Return probabilities
+    else:
+        return predictions.flatten()  # Return regression values
 
 
 # ============================================================================
 # Ensemble Methods
 # ============================================================================
 
-def build_ensemble(models: List[Model], input_shape: Tuple, 
+def build_ensemble(models: List[nn.Module], input_shape: Tuple, 
                    output_units: int, task: str = 'regression',
-                   voting: str = 'soft') -> Model:
+                   voting: str = 'soft') -> nn.Module:
     """
     Build an ensemble model combining multiple base models.
     
     For trading, ensemble often outperforms individual models.
     """
-    inputs = Input(shape=input_shape)
+    # For PyTorch, we don't build a single ensemble model
+    # Instead, we use ensemble_predict() which averages predictions
+    # This is simpler and more flexible
+    class EnsembleModel(nn.Module):
+        def __init__(self, models):
+            super().__init__()
+            self.models = nn.ModuleList(models)
+            for model in self.models:
+                for param in model.parameters():
+                    param.requires_grad = False  # Freeze base models
+        
+        def forward(self, x):
+            outputs = [model(x) for model in self.models]
+            if task == 'classification' and voting == 'soft':
+                # Average probabilities
+                avg_output = torch.stack(outputs).mean(dim=0)
+                return avg_output
+            else:
+                # Average regression outputs
+                avg_output = torch.stack(outputs).mean(dim=0)
+                return avg_output
     
-    # Get outputs from all models
-    outputs = []
-    for i, model in enumerate(models):
-        # Freeze the base model weights
-        model.trainable = False
-        model._name = f'base_model_{i}'
-        output = model(inputs)
-        outputs.append(output)
-    
-    if len(outputs) == 1:
-        ensemble_output = outputs[0]
-    else:
-        if task == 'classification' and voting == 'soft':
-            # Average probabilities (soft voting)
-            stacked = tf.stack(outputs, axis=0)
-            ensemble_output = tf.reduce_mean(stacked, axis=0)
-        else:
-            # Average predictions
-            stacked = tf.stack(outputs, axis=0)
-            ensemble_output = tf.reduce_mean(stacked, axis=0)
-    
-    return Model(inputs=inputs, outputs=ensemble_output, name='Ensemble')
+    return EnsembleModel(models)
 
 
-def ensemble_predict(models: List[Model], X: np.ndarray, 
+def ensemble_predict(models: List[nn.Module], X: np.ndarray,
                      task: str = 'regression', voting: str = 'soft') -> np.ndarray:
-    """Make ensemble predictions from multiple models."""
+    """Make ensemble predictions from multiple PyTorch models."""
     predictions = []
     
-    # Use MAXIMUM batch size for prediction if GPU available (target: 95% utilization)
+    # Use MAXIMUM batch size for prediction if GPU available
     predict_batch_size = 1024 if GPU_AVAILABLE else 32
     
     for model in models:
-        pred = model.predict(X, batch_size=predict_batch_size, verbose=0)
+        pred = predict_model(model, X, batch_size=predict_batch_size, task=task)
         predictions.append(pred)
     
     predictions = np.array(predictions)
@@ -1178,21 +797,29 @@ def plot_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray,
         plt.show()
 
 
-def plot_feature_importance(model: Model, feature_names: List[str],
+def plot_feature_importance(model: nn.Module, feature_names: List[str],
                             X_sample: np.ndarray, save_path: str = None):
     """Plot feature importance using gradient-based attribution."""
     try:
+        device = get_device()
+        model.eval()
+        
         # Get the last timestep features
         if len(X_sample.shape) == 3:
             X_sample = X_sample[:100]  # Use first 100 samples
         
-        # Calculate gradient-based importance
-        with tf.GradientTape() as tape:
-            X_tensor = tf.Variable(X_sample, dtype=tf.float32)
-            predictions = model(X_tensor)
+        X_tensor = torch.FloatTensor(X_sample).to(device)
+        X_tensor.requires_grad = True
         
-        gradients = tape.gradient(predictions, X_tensor)
-        importance = np.mean(np.abs(gradients.numpy()), axis=(0, 1))
+        # Forward pass
+        predictions = model(X_tensor)
+        
+        # Calculate gradients
+        if predictions.dim() > 1:
+            predictions = predictions.mean()
+        
+        gradients = torch.autograd.grad(predictions, X_tensor, create_graph=False)[0]
+        importance = np.mean(np.abs(gradients.cpu().detach().numpy()), axis=(0, 1))
         
         # Plot
         fig, ax = plt.subplots(figsize=(12, 8))
@@ -1244,12 +871,13 @@ def train_single_model(model_name: str, dataset_name: str, df: pd.DataFrame,
     input_shape = (data['sequence_length'], data['n_features'])
     model = get_model(model_name, input_shape, output_units, config, task)
     
-    # Compile model
-    compile_model(model, config, task)
-    
     # Print model summary
     print("\nModel Summary:")
-    model.summary()
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Total parameters: {total_params:,}")
+    print(f"Trainable parameters: {trainable_params:,}")
+    print(f"Model architecture: {model.__class__.__name__}")
     
     # Create output directories
     models_dir = os.path.join(output_dir, config.get('OUTPUT', 'models_dir'))
@@ -1259,34 +887,34 @@ def train_single_model(model_name: str, dataset_name: str, df: pd.DataFrame,
     for d in [models_dir, scalers_dir, results_dir]:
         os.makedirs(d, exist_ok=True)
     
-    # Model path
-    model_filename = f"{model_name}_{dataset_name}_{task}.keras"
+    # Model path (PyTorch format)
+    model_filename = f"{model_name}_{dataset_name}_{task}.pth"
     model_path = os.path.join(models_dir, model_filename)
     
     # Train model
     print("\nTraining...")
     history = train_model(model, data['X_train'], data['y_train'], 
-                          config, model_path, data['class_weights'])
+                          config, model_path, data['class_weights'], task=task)
     
     # Evaluate model
     print("\nEvaluating...")
-    # Use MAXIMUM batch size for prediction if GPU available (target: 95% utilization)
+    # Use MAXIMUM batch size for prediction if GPU available
     predict_batch_size = 1024 if GPU_AVAILABLE else 32
     
     if task == 'classification':
-        y_pred_probs = model.predict(data['X_test'], batch_size=predict_batch_size, verbose=0)
+        y_pred_probs = predict_model(model, data['X_test'], batch_size=predict_batch_size, task=task)
         y_pred = np.argmax(y_pred_probs, axis=1)
         metrics = evaluate_classification(data['y_test'], y_pred)
     else:
-        y_pred = model.predict(data['X_test'], batch_size=predict_batch_size, verbose=0).flatten()
+        y_pred = predict_model(model, data['X_test'], batch_size=predict_batch_size, task=task)
         metrics = evaluate_regression(data['y_test'], y_pred, data['target_scaler'])
     
     print("\nMetrics:")
     for metric, value in metrics.items():
         print(f"  {metric}: {value:.6f}")
     
-    # Save model
-    model.save(model_path)
+    # Model is already saved during training (best model), but save final model too
+    pytorch_save_model(model, model_path)
     print(f"\nModel saved to: {model_path}")
     
     # Save scalers and metadata
@@ -1584,10 +1212,11 @@ def main():
     # Print GPU status
     if GPU_AVAILABLE:
         print(f"\n✅ GPU Acceleration: ENABLED")
-        print(f"   TensorFlow version: {tf.__version__}")
-        print(f"   CUDA available: {tf.test.is_built_with_cuda()}")
-        if tf.test.is_built_with_cuda():
-            print(f"   GPU devices: {len(tf.config.list_physical_devices('GPU'))}")
+        print(f"   PyTorch version: {torch.__version__}")
+        print(f"   CUDA available: {torch.cuda.is_available()}")
+        if torch.cuda.is_available():
+            print(f"   GPU devices: {torch.cuda.device_count()}")
+            print(f"   GPU: {torch.cuda.get_device_name(0)}")
     else:
         print(f"\n⚠️  GPU Acceleration: DISABLED (using CPU)")
     

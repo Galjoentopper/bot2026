@@ -9,46 +9,10 @@ import sys
 from pathlib import Path
 import subprocess
 
-# Set LD_LIBRARY_PATH for TensorFlow GPU support
-# TensorFlow needs to find CUDA/cuDNN libraries at runtime
-# Comprehensive library paths for RunPod CUDA 12.4 installation
-cuda_paths = [
-    '/usr/local/cuda-12.4/targets/x86_64-linux/lib',  # Main CUDA libraries (libcudart, libcublas, etc.)
-    '/usr/local/cuda-12.4/targets/x86_64-linux/lib/stubs',  # Development stubs for linking
-    '/usr/local/lib/python3.11/dist-packages/nvidia/cudnn/lib',  # cuDNN libraries
-    '/usr/local/lib/python3.11/dist-packages/nvidia/cuda_runtime/lib',  # CUDA runtime
-    '/usr/local/lib/python3.11/dist-packages/nvidia/cublas/lib',  # cuBLAS
-    '/usr/lib/x86_64-linux-gnu',  # System CUDA driver (libcuda.so)
-    '/usr/local/nvidia/lib',  # RunPod default NVIDIA libraries
-    '/usr/local/nvidia/lib64',  # RunPod default NVIDIA libraries (64-bit)
-    '/usr/local/cuda-12.4/lib64',  # Alternative CUDA path
-    '/usr/local/cuda/lib64',  # Generic CUDA path (if symlinked)
-]
-
-current_ld_path = os.environ.get('LD_LIBRARY_PATH', '')
-current_paths = current_ld_path.split(':') if current_ld_path else []
-ld_paths_to_add = []
-
-for cuda_path in cuda_paths:
-    if os.path.exists(cuda_path) and cuda_path not in current_paths:
-        ld_paths_to_add.append(cuda_path)
-
-if ld_paths_to_add:
-    new_ld_path = ':'.join(ld_paths_to_add)
-    if current_ld_path:
-        os.environ['LD_LIBRARY_PATH'] = f"{new_ld_path}:{current_ld_path}"
-    else:
-        os.environ['LD_LIBRARY_PATH'] = new_ld_path
-    print(f"✓ Set LD_LIBRARY_PATH for CUDA libraries")
-    print(f"  Added {len(ld_paths_to_add)} path(s) to LD_LIBRARY_PATH")
-
-# Set TensorFlow-specific environment variables for GPU support
-# These help with GPU initialization and library loading
-os.environ.setdefault('TF_FORCE_GPU_ALLOW_GROWTH', 'true')  # Allow GPU memory growth
-os.environ.setdefault('CUDA_VISIBLE_DEVICES', '0')  # Ensure GPU 0 is visible
-# Keep TF_CPP_MIN_LOG_LEVEL at 1 (warnings only) unless debugging
-if 'TF_CPP_MIN_LOG_LEVEL' not in os.environ:
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # Reduce TensorFlow log noise
+# PyTorch handles GPU detection automatically - no manual setup needed!
+# CUDA_VISIBLE_DEVICES can still be set if needed
+if 'CUDA_VISIBLE_DEVICES' not in os.environ:
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # Ensure GPU 0 is visible
 
 # ============================================
 # STEP 1: Setup Paths
@@ -156,7 +120,7 @@ if requirements_file.exists():
     
     # Check key packages
     key_packages = {
-        'tensorflow': 'tensorflow',
+        'torch': 'torch',
         'torch': 'torch',
         'stable_baselines3': 'stable-baselines3',
         'pandas': 'pandas',
@@ -197,33 +161,16 @@ else:
 
 # Verify key packages are available
 try:
-    import tensorflow as tf
-    print(f"✓ TensorFlow: {tf.__version__}")
-    
-    # Check TensorFlow GPU support
-    print(f"  CUDA built-in: {tf.test.is_built_with_cuda()}")
-    print(f"  GPU support: {tf.test.is_built_with_gpu_support()}")
-    
-    # Try to list GPU devices
-    try:
-        gpus = tf.config.list_physical_devices('GPU')
-        if gpus:
-            print(f"  ✓ GPU devices detected: {len(gpus)}")
-        else:
-            print("  ⚠ No GPU devices found by TensorFlow")
-            print("  💡 This may be a library loading issue")
-    except Exception as e:
-        print(f"  ⚠ Error checking GPU: {e}")
-        
-except ImportError:
-    print("⚠ TensorFlow not available")
-
-try:
     import torch
     print(f"✓ PyTorch: {torch.__version__}")
     print(f"  CUDA available: {torch.cuda.is_available()}")
     if torch.cuda.is_available():
         print(f"  CUDA version: {torch.version.cuda}")
+        print(f"  GPU devices: {torch.cuda.device_count()}")
+        for i in range(torch.cuda.device_count()):
+            print(f"    GPU {i}: {torch.cuda.get_device_name(i)}")
+    else:
+        print("  ⚠ No GPU devices detected")
 except ImportError:
     print("⚠ PyTorch not available")
 
@@ -241,30 +188,15 @@ print("STEP 3: Verifying GPU...")
 print("=" * 60)
 
 import torch
-import tensorflow as tf
 
 # PyTorch GPU
 if torch.cuda.is_available():
     print(f"✓ PyTorch GPU: {torch.cuda.get_device_name(0)}")
     print(f"✓ GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+    print(f"✓ CUDA Version: {torch.version.cuda}")
 else:
     print("⚠ No PyTorch GPU detected!")
-    print("  Training will be VERY slow on CPU")
-
-# TensorFlow GPU
-gpus = tf.config.list_physical_devices('GPU')
-if gpus:
-    print(f"✓ TensorFlow GPU: {len(gpus)} GPU(s) available")
-    for i, gpu in enumerate(gpus):
-        print(f"  GPU {i}: {gpu.name}")
-else:
-    print("⚠ No TensorFlow GPU detected!")
-
-if not torch.cuda.is_available() and not gpus:
-    print("\n" + "⚠" * 30)
-    print("⚠ WARNING: No GPU detected!")
-    print("   Training will be VERY slow on CPU.")
-    print("⚠" * 30)
+    print("  Training will be slower on CPU")
     response = input("\nContinue anyway? (y/n): ")
     if response.lower() != 'y':
         sys.exit(1)
@@ -601,9 +533,8 @@ if push_to_github:
         # Prediction models
         models_dir = PROJECT_PATH / 'models'
         if models_dir.exists():
-            files_to_push.extend(models_dir.glob('*.keras'))
-            files_to_push.extend(models_dir.glob('*.h5'))
-            files_to_push.extend(models_dir.glob('*.hdf5'))
+            files_to_push.extend(models_dir.glob('*.pth'))
+            files_to_push.extend(models_dir.glob('*.pt'))  # Alternative PyTorch extension
         
         # PPO models
         ppo_models_dir = get_ppo_models_path()
@@ -681,7 +612,7 @@ if push_to_github:
         
         if files_to_push:
             print(f"Found {len(files_to_push)} file(s) to push:")
-            print(f"  - Models: {len([f for f in files_to_push if f.suffix in ['.keras', '.h5', '.hdf5', '.zip']])}")
+            print(f"  - Models: {len([f for f in files_to_push if f.suffix in ['.pth', '.pt', '.zip']])}")
             print(f"  - Datasets: {len([f for f in files_to_push if f.suffix == '.csv'])}")
             print(f"  - Scalers: {len([f for f in files_to_push if f.suffix == '.pkl'])}")
             print(f"  - Results: {len([f for f in files_to_push if f.suffix in ['.png', '.jpg', '.json']])}")
