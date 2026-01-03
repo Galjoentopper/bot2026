@@ -77,9 +77,14 @@ def configure_gpu():
         
         # Enable XLA (Accelerated Linear Algebra) for faster execution
         # XLA compiles operations for better GPU utilization
+        # NOTE: Disabled by default due to CuDNN version compatibility issues
+        # Uncomment below if you have matching CuDNN versions
         try:
-            tf.config.optimizer.set_jit(True)
-            print("✅ XLA JIT compilation enabled - better GPU utilization")
+            # Check CuDNN version compatibility first
+            # XLA requires matching CuDNN versions, so we disable it to avoid errors
+            # tf.config.optimizer.set_jit(True)
+            # print("✅ XLA JIT compilation enabled - better GPU utilization")
+            print("⚠️  XLA JIT compilation disabled - using standard execution (CuDNN compatibility)")
         except Exception as e:
             print(f"⚠️  XLA not available: {e}")
         
@@ -690,10 +695,14 @@ def compile_model(model: Model, config: ConfigParser, task: str = 'regression'):
     }
     
     # Add jit_compile for XLA optimization (TF 2.7+)
+    # NOTE: Disabled due to CuDNN version compatibility issues
+    # Uncomment below if you have matching CuDNN versions
     if GPU_AVAILABLE:
         try:
             # XLA JIT compilation can provide 10-30% speedup
-            compile_kwargs['jit_compile'] = True
+            # But requires matching CuDNN versions (compiled vs runtime)
+            # compile_kwargs['jit_compile'] = True
+            pass
         except TypeError:
             # jit_compile not available in older TF versions
             pass
