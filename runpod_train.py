@@ -11,21 +11,26 @@ import subprocess
 
 # Set LD_LIBRARY_PATH for TensorFlow GPU support
 # TensorFlow needs to find CUDA/cuDNN libraries at runtime
-# Based on RunPod's CUDA 12.4 installation structure
+# Comprehensive library paths for RunPod CUDA 12.4 installation
 cuda_paths = [
-    '/usr/local/cuda-12.4/targets/x86_64-linux/lib',  # Main CUDA libraries (libcudart, libcublas)
+    '/usr/local/cuda-12.4/targets/x86_64-linux/lib',  # Main CUDA libraries (libcudart, libcublas, etc.)
+    '/usr/local/cuda-12.4/targets/x86_64-linux/lib/stubs',  # Development stubs for linking
     '/usr/local/lib/python3.11/dist-packages/nvidia/cudnn/lib',  # cuDNN libraries
     '/usr/local/lib/python3.11/dist-packages/nvidia/cuda_runtime/lib',  # CUDA runtime
     '/usr/local/lib/python3.11/dist-packages/nvidia/cublas/lib',  # cuBLAS
-    '/usr/lib/x86_64-linux-gnu',  # System CUDA driver
+    '/usr/lib/x86_64-linux-gnu',  # System CUDA driver (libcuda.so)
+    '/usr/local/nvidia/lib',  # RunPod default NVIDIA libraries
+    '/usr/local/nvidia/lib64',  # RunPod default NVIDIA libraries (64-bit)
     '/usr/local/cuda-12.4/lib64',  # Alternative CUDA path
+    '/usr/local/cuda/lib64',  # Generic CUDA path (if symlinked)
 ]
 
 current_ld_path = os.environ.get('LD_LIBRARY_PATH', '')
+current_paths = current_ld_path.split(':') if current_ld_path else []
 ld_paths_to_add = []
 
 for cuda_path in cuda_paths:
-    if os.path.exists(cuda_path) and cuda_path not in current_ld_path:
+    if os.path.exists(cuda_path) and cuda_path not in current_paths:
         ld_paths_to_add.append(cuda_path)
 
 if ld_paths_to_add:
@@ -36,6 +41,14 @@ if ld_paths_to_add:
         os.environ['LD_LIBRARY_PATH'] = new_ld_path
     print(f"✓ Set LD_LIBRARY_PATH for CUDA libraries")
     print(f"  Added {len(ld_paths_to_add)} path(s) to LD_LIBRARY_PATH")
+
+# Set TensorFlow-specific environment variables for GPU support
+# These help with GPU initialization and library loading
+os.environ.setdefault('TF_FORCE_GPU_ALLOW_GROWTH', 'true')  # Allow GPU memory growth
+os.environ.setdefault('CUDA_VISIBLE_DEVICES', '0')  # Ensure GPU 0 is visible
+# Keep TF_CPP_MIN_LOG_LEVEL at 1 (warnings only) unless debugging
+if 'TF_CPP_MIN_LOG_LEVEL' not in os.environ:
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'  # Reduce TensorFlow log noise
 
 # ============================================
 # STEP 1: Setup Paths

@@ -107,9 +107,14 @@ if [ -f "requirements.txt" ]; then
     python3 -m pip install --upgrade pip setuptools wheel
     
     # Set LD_LIBRARY_PATH for TensorFlow GPU support (RunPod CUDA 12.4 structure)
+    # Comprehensive library paths matching Python code
     if [ -d "/usr/local/cuda-12.4/targets/x86_64-linux/lib" ]; then
         export LD_LIBRARY_PATH=/usr/local/cuda-12.4/targets/x86_64-linux/lib:$LD_LIBRARY_PATH
         echo "✓ CUDA 12.4 libraries found"
+    fi
+    if [ -d "/usr/local/cuda-12.4/targets/x86_64-linux/lib/stubs" ]; then
+        export LD_LIBRARY_PATH=/usr/local/cuda-12.4/targets/x86_64-linux/lib/stubs:$LD_LIBRARY_PATH
+        echo "✓ CUDA development stubs found"
     fi
     if [ -d "/usr/local/lib/python3.11/dist-packages/nvidia/cudnn/lib" ]; then
         export LD_LIBRARY_PATH=/usr/local/lib/python3.11/dist-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH
@@ -123,6 +128,25 @@ if [ -f "requirements.txt" ]; then
     fi
     if [ -d "/usr/lib/x86_64-linux-gnu" ]; then
         export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+    fi
+    if [ -d "/usr/local/nvidia/lib" ]; then
+        export LD_LIBRARY_PATH=/usr/local/nvidia/lib:$LD_LIBRARY_PATH
+    fi
+    if [ -d "/usr/local/nvidia/lib64" ]; then
+        export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
+    fi
+    if [ -d "/usr/local/cuda-12.4/lib64" ]; then
+        export LD_LIBRARY_PATH=/usr/local/cuda-12.4/lib64:$LD_LIBRARY_PATH
+    fi
+    if [ -d "/usr/local/cuda/lib64" ]; then
+        export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+    fi
+    
+    # Set TensorFlow-specific environment variables
+    export TF_FORCE_GPU_ALLOW_GROWTH=true
+    export CUDA_VISIBLE_DEVICES=0
+    if [ -z "$TF_CPP_MIN_LOG_LEVEL" ]; then
+        export TF_CPP_MIN_LOG_LEVEL=1
     fi
     
     python3 -m pip install -r requirements.txt
@@ -142,19 +166,28 @@ echo ""
 echo "9. Checking TensorFlow:"
 python3 -c "import tensorflow as tf; print(f'TensorFlow: {tf.__version__}'); gpus = tf.config.list_physical_devices('GPU'); print(f'GPU available: {len(gpus) > 0}'); [print(f'  {gpu.name}') for gpu in gpus]" 2>/dev/null || echo "⚠ TensorFlow not installed"
 
+# Run GPU diagnostic if script exists
+echo ""
+echo "10. Running TensorFlow GPU diagnostic (if available):"
+if [ -f "diagnose_tensorflow_gpu.py" ]; then
+    python3 diagnose_tensorflow_gpu.py 2>/dev/null || echo "⚠ Diagnostic script failed"
+else
+    echo "⚠ diagnose_tensorflow_gpu.py not found (optional diagnostic tool)"
+fi
+
 # Check stable-baselines3
 echo ""
-echo "10. Checking stable-baselines3:"
+echo "11. Checking stable-baselines3:"
 python3 -c "import stable_baselines3; print(f'stable-baselines3: {stable_baselines3.__version__}')" 2>/dev/null || echo "⚠ stable-baselines3 not installed"
 
 # Check other dependencies
 echo ""
-echo "11. Checking other dependencies:"
+echo "12. Checking other dependencies:"
 python3 -c "import pandas, numpy, sklearn, gymnasium; print('✓ Core dependencies available')" 2>/dev/null || echo "⚠ Some dependencies missing"
 
 # Verify Git setup
 echo ""
-echo "12. Checking Git configuration:"
+echo "13. Checking Git configuration:"
 if command -v git &> /dev/null; then
     echo "✓ Git is installed"
     if [ -d ".git" ]; then
