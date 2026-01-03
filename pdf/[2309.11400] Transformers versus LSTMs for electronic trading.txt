@@ -1,0 +1,732 @@
+
+================================================================================
+Page 1
+================================================================================
+
+\useunder\ul
+Transformers versus LSTMs for electronic trading
+\anchorhttps://orcid.org/0000-0001-6846-6649
+ Paul BilokonDepartment of Computing Imperial College London South Kensington
+Campus London SW7 2AZ paul.bilokon@imperial.ac.uk&\anchorhttps://orcid.org/0009-0005-1206-1710
+ Yitao QiuDepartment of Computing Imperial College London South Kensington
+Campus London SW7 2AZ yitao.qiu21@imperial.ac.uk
+Abstract
+With the rapid development of artificial intelligence, long short term memory (LSTM), one kind of recurrentneural network (RNN), has been widely applied in time series prediction .
+Like RNN, Transformer is designed to handle the sequential data. As Transformer achieved great success inNatural Language Processing (NLP), researchers got interested in Transformer’s performance on time seriesprediction, and plenty of Transformer-based solutions on long time series forecasting have come out re-cently. However, when it comes to financial time series prediction, LSTM is still a dominant architecture.Therefore, the question this study wants to answer is: whether the Transformer-based model can be appliedin financial time series prediction and beat LSTM.
+To answer this question, various LSTM-based and Transformer-based models are compared on multiple fi-nancial prediction tasks based on high-frequency limit order book data. A new LSTM-based model calledDLSTM is built and new architecture for the Transformer-based model is designed to adapt for financial pre-diction. The experiment result reflects that the Transformer-based model only has the limited advantage inabsolute price sequence prediction. The LSTM-based models show better and more robust performance ondifference sequence prediction, such as price difference and price movement.
+1 Introduction
+Financial time series prediction is a significant task in investing and market-making activities. The EfficientMarket Hypothesis proposed by Eugene [1] states that all the information of the asset’s inner value has al-
+ready precisely and completely reflected on the asset price, and it is impossible to beat the market by finan-cial prediction. However, whether the market is efficient is questionable because technical analysis [2] be-lieves the financial market is the physical movement of price (or features derived from prices). The price in-formation can be interpreted by waves and patterns that can repeat themselves, where it is possible to makeprofitable buy or sell decisions in advance [3, 4]. During the prediction, challenging factors are noise and
+volatile features because price information is generally non-linear and non-stationary [5]. Lots of models areproposed to solve the financial time series problem. A typical linear model for regression is Auto-RegressiveIntegrated Moving average (ARIMA) [6] and its variations, which requires domain expertise to handcraft fea-tures. With the development of machine learning, Artificial Neural Networks (ANN) raises great interest be-cause of their capability to extract more abstract features from data and find a hidden non-linear relation-ship without assumptions or human expertise by adding more parameters. Long short-term memory (LSTM),which is a special recurrent neural network (RNN) architecture that has been proven successful in the appli-cation of sequential data, is widely applied to handwriting recognition [7] and speech recognition [8]. Like
+RNN, the Transformer [9] is also used to handle the sequential data. Compared to LSTM, the Transformerdoes not need to handle the sequence data in order, which instead confers the meaning of the sequence bythe Self-attention mechanism.
+Applying LSTM and Transformer for financial time series prediction is a popular trend nowadays.Depending on the historical financial data, researchers usually make predictions for the future numerical
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 1/32
+
+================================================================================
+Page 2
+================================================================================
+
+prices, price difference, return or future price movement (rise, stationary, fall). Although LSTM andTransformer are applied in different aspects for this problem. There are mainly two research directions:
+1)Make predictions based on high-frequency Limit Order Book (LOB) data and its derived features, suchas Volume Order Imbalance (VOI) and Trade Flow Imbalance (TFI) [10, 11, 12, 13, 14].
+2)Make predictions based on OHLC (Open, High, Low, Close) data and its derived financial indices, suchas Relative Strength Index (RSI) and Moving average convergence divergence (MACD) [15, 16, 17, 18, 19
+, 20, 21, 22, 23, 24, 25].
+Since 2017, the Transformer has been increasingly used for Natural Language Processing (NLP) problems. Itproduces more impressive results than RNN, such as machine translation [26] and speech applications [27],
+replacing RNN models such as LSTM in NLP tasks. Recently, a surge of Transformer-based solutions for lessexplored long time series forecasting problem has appeared [28]. However, as for the financial time seriesprediction, LSTM remains the dominant architecture.
+Whether Transformer-based methods can be the right solution for financial time series forecasting is a prob-lem worth investigating. Therefore, this paper is going to compare the performance of differentTransformer-based and LSTM-based methods on financial time series prediction problems based on LOBdata and attempt to adapt new models based on Transformer and LSTM. The contributions of this study aresummed up as follows:
+1.Systematically compare Transformer-based and LSTM-based methods in different financial predictiontasks based on high frequency LOB data collected from Binance Exchange. Tasks include (1) mid-priceprediction, (2) mid-price difference prediction and (3) mid-price movement prediction.
+2.For the first and second tasks, comparisons are all conducted on previous LSTM-based andTransformer-based methods. In the first task, the Transformer-based method has around 10%−25%prediction error less than the LSTM-based method, but the prediction result quality is insufficient fortrading. In the second task, the LSTM-based method performs better than the Transformer-basedmethod, where its highest out-of-sample 𝑅2 reaches around 11.5%.
+3.The most significant contribution of this study is in the last task, mid-price movement prediction. Anew LSTM-based model named DLSTM is developed for this task, which combines LSTM and the timeseries decomposition method. This model achieves 63.73% to 73.31% accuracy and shows strong prof-itability and robustness in simulated trading, outperforming previous LSTM and Transformer-basedmethods. In addition, the architecture of previous Transformer-based methods is also changed in or-der to adapt movement prediction task.
+The later parts of this study are structured as follows: The background and related work are introduced inSection 2. Section 3 describes the formulation of three financial prediction tasks. Section 4 explains the de-tails of previous Transformer-based and LSTM-based methods used for comparison. Section 5 is the analysisof experiment results. Please note that the details of the newly developed DLSTM model and the architecturechanges of Transformer models are explained in Section 5.3 in Section 5. The study is organized in this wayto provide readers with a better understanding of the relationship among three financial prediction tasks.
+The Source Code of this study is available at:https://github.com/772435284/transformers_versus_lstms_for_electronic_trading
+Acknowledgements
+We would like to express our gratitude to Zhipeng Wang for constructive comments and suggestions.
+2 Background and Related work
+Time series prediction has been applied in different financial activities. For example, the trader or marketmaker predicts the future price or the price movement of the assets so that he/she can design trading/marketmaking strategies based on the prediction results to make profit from it. This part examines papers related totime series prediction using LSTM and Transformer. Most of them are related to financial time seriesprediction.
+2.1 LSTM-based Time Series Prediction Solutions
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 2/32
+
+================================================================================
+Page 3
+================================================================================
+
+LSTM has been widely utilized in financial time series prediction depending on OHLC data and its derived fi-nancial indices. Many works [15, 16, 17, 18, 19] present predicting stock prices as successful by LSTM.Bidirectional LSTM (BiLSTM) is applied to increase the prediction performance [20]. With the rise of NLP,
+Sequence-to-Sequence Model (S2S) [29] is proposed and applied in machine translation and question an-swering. It is now also applied in financial time series prediction by combining LSTM structure and attentionmechanisms contributing to higher performance [21, 22].
+LSTM has successfully forecasted high-frequency data depending on the large datasets extracted from thelimit order book (LOB). In terms of making predictions upon order book data, Convolution Neural Network(CNN) and LSTM are both in favour of research and sometimes they are combined. Sirignano et al. [10]trained a universal model using LSTM to predict the LOB price movement by data from all stocks, which out-performs linear and non-linear models trained on a specific asset. Zhang et al. [11] combine CNN and LSTMto form a new deep neural network architecture called DeepLOB to predict future stock price movements inLOB data outperforming architecture only containing LSTM. Zhang et al. [12] also combine the DeepLOB ar-
+chitecture with Seq2Seq and Attention model to forecast multi-horizon future price movements in one for-ward procedure, which reduces the training effort and achieves better performance in long horizon predic-tion than DeepLOB. According to Tsantekidis et al. [13], the structure of CNN-LSTM architecture is able tooutperform other models on LOB price movement prediction because of its more stable behaviour. Kolm etal. [14] use the OFI feature derived from the LOB to predict the future min-price return, where the CNN-
+LSTM structure still achieves the best performance.
+2.2 Transformer-based Time Series Prediction Solutions
+As Transformer makes a great contribution to NLP [30], many advanced models are proposed, such as BERTand GPT-3, which now have more influence in time series prediction. As the canonical Self-attention mecha-nism has 𝑂 (𝐿2) time and memory complexity, many modifications have been made to the Transformer in or-der to adapt to the time series prediction problem to process the long sequence efficiently. There are manyalternative Transformer models for long time series forecasting problem have been developed recently [28]:LogTrans[31], Reformer [32], Informer [33], Autoformer [34], Pyraformer [35] and the recent FEDformer [
+36].
+Theses Transformer models mentioned above are mainly evaluated on non-financial datasets, such as elec-tricity consumption, traffic usage, and solar energy dataset. They achieve a considerable performance in-crease in accuracy over the LSTM model. Some works start applying Transformers for financial time seriesprediction. Hu [23] uses a Temporal Fusion Transformer with support vector regression (SVR) and LSTM to
+predict stock price. Sridhar et al. [24] predict the Dogecoin price through Transformer, which has superiorperformance compared to LSTM. Sonkiya et al. [25] do sentiment analysis by BERT to generate the sentiment
+score, which is then combined with other financial indices and passed into the Generative AdversarialNetwork (GAN) for stock price prediction. These works [23, 24, 25] use Transformer-based methods to makepredictions based on OHLC data and the research on applying Transformer for LOB prediction is limited.
+Overall, LSTM is applied broadly in financial time series prediction and has been tested on various datasets,while the Transformer is limited. Therefore, this study wants to apply these Transformer-based models to awider region in financial time series prediction to compare their performance to LSTM.
+3 Financial Time Series Prediction Tasks Formulation
+This study compares LSTM-based and Transformer-based methods among three financial prediction tasksbased on LOB data. In this section, the basic concept of LOB will be first introduced, and then the formulationof three financial prediction tasks will be explained in detail. Three tasks are listed below:
+• Task 1: LOB Mid-Price Prediction
+• Task 2: LOB Mid-Price Difference Prediction
+• Task 3: LOB Mid-Price Movement Prediction
+3.1 Limit Order Book
+With computers and the Internet, most financial products such as stocks, forex and cryptocurrency aretraded on the electronic market nowadays. Two types of orders exist in the electronic market: limit orderand market order. According to Gould et al. [37], a limit order is the order to execute buy or sell direction at a
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 3/32
+
+================================================================================
+Page 4
+================================================================================
+
+specific price, where the orders can be succeeded, overdue, or cancelled and are recorded by the LOB. Thereare bid limit orders and ask limit orders used to buy and sell products by the trader or sell and buy productsby the market marker. The highest bid price the buyers are ready to buy is referred to as the best bid price,and the lowest ask price the sellers are ready to sell is called the best ask price. The average of these twoprices is called the mid-price, which reflects the current value of the financial product. The difference be-tween them is the spread, which the market marker can usually make a profit. The illustration of the LOB isshown in Fig 1.
+Figure 1:An illustration of LOB based on Zhang et al. [11] and Kolm et al. [14].
+Another type of order is the market order, where the trader can immediately buy/sell the product at the bestprice. There exists a matching mechanism in the LOB. Most exchanges adopt the price and time prioritymatching mechanism. The limit orders will be first executed in order with a better price. If two orders havethe same execution price, then the order that comes first in time will be executed first, following the first infirst out (FIFO) principle.
+3.2 Task 1: LOB Mid-Price Prediction
+The first task is to predict the LOB Mid-Price Prediction, which is to compare the ability to predict absoluteprice values similar to non-financial datasets in previous works [31, 33, 34, 36, 35]. The definition of time se-ries prediction is given below and shown in Figure 2:
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 4/32
+
+================================================================================
+Page 5
+================================================================================
+
+(1)
+(2)
+(3)
+(4)
+(5)
+(6)
+(7)
+Figure 2:The illustration of time series prediction.
+First, define a sliding window size 𝐿𝑥 for the past data. The input data at each time step 𝑡 is defined as:
+𝑋𝑡={𝑥1,𝑥2,…,𝑥𝐿𝑥}𝑡
+Then define a prediction window size 𝑘, where the goal is to predict the information in future 𝐿𝑥+𝑘 steps. Itwill be the single-step prediction when 𝑘=1 and be multi-horizon prediction when 𝑘>1. Then the output attime step t is defined as:
+𝑌𝑡={𝑦1,𝑦2,…,𝑦𝑘}𝑡
+The next step is to define the 𝑥𝑡 and 𝑦𝑡 in the input and output for mid-price prediction. Assume the market
+depth is 10. For a limit bid order at time t, the bid price is denoted as 𝑝𝑖,𝑡𝑏 𝑖 𝑑 and the volume is 𝑣𝑖,𝑡𝑏 𝑖 𝑑, where 𝑖 is the
+market depth. Same for the limit ask order, ask price is 𝑝𝑖,𝑡𝑎 𝑠 𝑘 and volume is 𝑣𝑖,𝑡𝑎 𝑠 𝑘. Then the LOB data at time t is
+defined as:
+𝑥𝑡=[𝑝𝑖,𝑡𝑎 𝑠 𝑘,𝑣𝑖,𝑡𝑎 𝑠 𝑘,𝑝𝑖,𝑡𝑏 𝑖 𝑑,𝑣𝑖,𝑡𝑏 𝑖 𝑑]𝑖=1
+𝑛=10∈𝑅40
+The past mid-price will be added to LOB data as input, and the mid-price is represented as:
+𝑝𝑡mid =𝑝1,𝑡𝑎 𝑠 𝑘+𝑝1,𝑡𝑏 𝑖 𝑑
+2
+Finally, the 𝑥𝑡 will be:
+𝑥𝑡=[𝑝𝑖,𝑡𝑎 𝑠 𝑘,𝑣𝑖,𝑡𝑎 𝑠 𝑘,𝑝𝑖,𝑡𝑏 𝑖 𝑑,𝑣𝑖,𝑡𝑏 𝑖 𝑑,𝑝𝑡mid ]𝑖=1
+𝑛=10∈𝑅41
+The target is to predict the future mid-price, so 𝑦𝑡=𝑝𝑡mid .
+3.3 Task 2: LOB Mid-Price Difference Prediction
+The second task is to predict the mid-price change, which is the the difference of two mid-prices in differenttime step. Trading strategies can be designed if the price change becomes negative or positive. The input ofthis task is the same as the mid-price prediction, as described in Equation 3. The target is to regress the fu-ture difference between current mid-price 𝑝𝑡mid  and the future mid-price 𝑝𝑡+𝜏mid:
+𝑑𝑡+𝜏=𝑝𝑡+𝜏mid−𝑝𝑡mid 
+Like the mid-price prediction, a prediction window size is defined as 𝑘, then the output of this task in eachtimestamp 𝑡 is represented as:
+𝑌𝑡={𝑑𝑡+1,𝑑𝑡+2,…,𝑑𝑡+𝑘}𝑡
+3.4 Task 3: LOB Mid-Price Movement Prediction
+According to Ruppert [5], the absolute price information is generally non-stationary, while the price change
+information, such as price difference and return and approximately stationary. The the mid-price differenceis a difficult target for deep learning methods to predict because it is hard to extract meaningful pattern fromit, although it helps design trading strategies. An example of non-stationary and stationary sequence isshown in Figure 3.
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 5/32
+
+================================================================================
+Page 6
+================================================================================
+
+(8)
+(9)
+(10)
+(11)
+Figure 3:An example of non-stationary sequence vs stationary sequence.
+For this reason, an easier classification task for predicting mid-price movement is introduced here. To train amodel to predict mid-price movement, the first step is to create price movement labels for each timestamp.This study follows the smoothing labelling method from Tsantekidis et al. [38] and Zhang et al. [11]: Use 𝑚−
+to represent the average of the last 𝑘 mid-price and 𝑚+ to represent the average of the next 𝑘 mid-price:
+𝑚− (𝑡)=1𝑘 
+𝑘
+∑
+𝑖=0
+𝑝𝑡−𝑘𝑚 𝑖 𝑑
+𝑚+ (𝑡)=1𝑘 
+𝑘
+∑
+𝑖=1
+𝑝𝑡+𝑘𝑚 𝑖 𝑑
+𝑘 is set to 20,30,50,100 in this study following previous work of Zhang et al. [11].
+And then, define a percentage change 𝑙𝑡 to decide the price change direction.
+𝑙𝑡=𝑚+ (𝑡)−𝑚− (𝑡)𝑚− (𝑡)
+The label is dependent on the value of 𝑙𝑡. A threshold 𝛿 is set to decide the corresponding label. There arethree labels for the price movement:
+ label =
+⎧ ⎨ ⎩
+0 ( fall ), when  𝑙𝑡>𝛿1 ( stationary ), when −𝛿≤𝑙𝑡≤𝛿2 ( rise ), when  𝑙𝑡<−𝛿
+Figure 4:An example of labelling on horizon 100 on ETH-USDT dataset with fixed threshold 𝛿. The greencolour represents the rise signal. Purple represents the price is stationary and red colour means the pricefall.
+An example of labelling for horizon 100 is shown in Figure 4. Assume there is an input in Equation 3 at time-stamp 𝑡, predicting mid-price movement is a one-step ahead prediction, which is to predict the mid-pricemovement in timestamp 𝑡+1.
+4 Methodology
+4.1 LSTM
+LSTM was introduced by Hochreiter et al. [39] is one of the RNNs with structural adaptability in time series
+data input. Although the traditional RNN has the capacity to store data, but it suffers from the exploding gra-dient problem and vanishing gradient problem. Exploding/vanishing gradient means the gradient that isused to update the neural networks increases/decreases exponentially, which makes the neural network un-trainable [40]. Therefore, RNN is not successful in studying long-time series relations [41]. LSTM neural net-work utilizes the coordination of three gates to keep long-term dependency and short-term memory.According to Gers et al. [42], the three gates that LSTM utilizes are 1) forget gate, 2) input gate 3) output gate.
+The structure of an LSTM cell is shown in Figure 5.
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 6/32
+
+================================================================================
+Page 7
+================================================================================
+
+(12)
+(13)
+(14)
+(15)
+(16)
+(17)
+Figure 5:LSTM Structure based on Graves [43] and Fisher [19].
+The calculations of the LSTM are as follows [39]:
+First, the LSTM need to decide to forget some information from the cell state, which is done by the forgetgate. The forget gate has its sigmoid function 𝜎. Then the function of forget gate is:
+Γ𝑓⟨𝑡⟩=𝜎 (𝑊𝑓[ℎ⟨𝑡−1⟩,𝑥⟨𝑡⟩]+𝑏𝑓)
+Where the 𝑊𝑓 is the weight of the last hidden state and input, 𝑏𝑓 is the bias of the hidden state.The next step is to design what information the neural cell should remember. To update the information, theinput gate should coordinate with a 𝑡 𝑎 𝑛 ℎ layer containing a vector of new candidate values ~𝑐⟨𝑡⟩. The calcula-tion is as follows:
+Γ𝑖⟨𝑡⟩=𝜎 (𝑊𝑖[ℎ⟨𝑡−1⟩,𝑥⟨𝑡⟩]+𝑏𝑖)
+\useshortskip
+~𝑐⟨𝑡⟩=tanh (𝑊𝑐 [ℎ⟨𝑡−1⟩,𝑥⟨𝑡⟩]+𝑏𝑐)
+And then, with the previous steps of calculations, the cell state can be updated:
+𝑐⟨𝑡⟩=Γ𝑓⟨𝑡⟩∘𝑐⟨𝑡−1⟩+Γ𝑖⟨𝑡⟩∘~𝑐⟨𝑡⟩
+Lastly, calculate the result from the output gate to get the new hidden state:
+Γ𝑜⟨𝑡⟩=𝜎 (𝑊𝑜[ℎ⟨𝑡−1⟩,𝑥⟨𝑡⟩]+𝑏𝑜)
+ℎ⟨𝑡−1⟩=Γ𝑜⟨𝑡⟩∘tanh (~𝑐⟨𝑡⟩)
+The output of LSTM can be every hidden state or the final hidden state, which depends on the application. Inthe implementation, this hidden state will be fed into a multi-layer perceptron (MLP), also known as feedfor-ward-backwards propagation neural network (FFBPN). The output of this layer will pass through an activa-tion function to generate the final output. Usually, the final hidden state will be utilized in financial time se-ries prediction, which produces absolute price prediction or price movement prediction.
+4.1.1 Alternative LSTM-based Models
+Besides the canonical LSTM, three more LSTM based-models are chosen for comparison to Transformer-based models. They are DeepLOB [11], DeepLOB-Seq2Seq [12] and DeepLOB-Attention [12] created by Zhanget al. The architecture of these three models are shown in Figure 6 and 7. Here the structures of these threemodels are briefly explained:
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 7/32
+
+================================================================================
+Page 8
+================================================================================
+
+(18)
+(19)
+Figure 6:DeepLOB architecture sourced from Zhang et al. [11]. ”Conv 1×2 @16” means there is 16 filters ofsize 1×2 in this convolutional layer.
+DeepLOB[11] DeepLOB’s architecture consists of three main components: Convolutional Blocks, an
+Inception Module and an LSTM layer.A. Convolutional Blocks The LOB inputs mentioned in Equation 3 are fed into the convolutional blocks thatcontain multiple convolutional layers, where the first and second convolutional blocks are more importantthan the third one. The first convolutional block has a layer with filter size of (1×2) and stride of (1×2). Ateach order book level, this layer summarise the price and volume information {𝑝(𝑖),𝑣(𝑖)}. For the second
+convolutional block, it has a layer with the same filter size and stride as the first one, but it is a feature map-ping for the micro-price defined by [44]:
+𝑝micro =𝐼 𝑝𝑖𝑎 𝑠 𝑘+(1−𝐼) 𝑝𝑖bid 
+𝐼= 𝑣𝑖𝑏 𝑖 𝑑
+𝑣𝑖𝑎 𝑠 𝑘+𝑣𝑖𝑏 𝑖 𝑑
+𝐼 is called the imbalance. Then the last convolutional block integrates the feature information from the previ-ous two layers. The whole convolutional blocks work as a feature extractor.
+B. Inception Module the Inception Module employs the time series decomposition method. The input is de-composed by two 1×1 convolutions and one max-pooling layer into three lower-dimensional representa-tions. Then these representations pass through convolution layers with 32 channels to be merged together.This decomposition method improves the prediction accuracy.
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 8/32
+
+================================================================================
+Page 9
+================================================================================
+
+(20)
+(21)
+(22)
+(23)
+(24)
+C. LSTM Layer Finally, the extracted features are inputted into one LSTM layer to capture the underlying pat-tern and dependencies. The last output layer can be a SoftMax layer or a linear layer, which depends on thespecific tasks.
+Figure 7:DeepLOB-Seq2Seq and DeepLOB-Attention architecture sourced from Zhang et al. [12].
+DeepLOB-Seq2Seq[12] To generate multi-horizon predictions, Zhang et al. developed DeepLOB-Seq2Seq. Themain idea is to feed the output of the Inception Module into a Seq2Seq architecture to do iterated multi-step(IMS) prediction. Seq2Seq [45] architecture contains encoder and decoder constructed by recurrent neuralnetwork (RNN). Assume the sequence input is 𝑋𝑇=(𝑥1,𝑥2,⋯,𝑥𝑇), the encoder will output a hidden state ateach timestamp t:
+ℎ𝑡=𝑓 (ℎ𝑡−1,𝑥𝑡)
+After obtaining the hidden states from the encoder, a context vector 𝑐 has to be constructed from these hid-den states. The last hidden state or the mean of all hidden states can be taken as a context vector. Contextvector work as a ”bridge” between the encoder and decoder, where the context vector is utilized to initializethe decoder, and the hidden state output of the decoder at each timestamp is:
+𝑑𝑡=𝑓 (𝑑𝑡−1,𝑦𝑡−1,𝑐)
+Then the distribution of the output 𝑦𝑡 is:
+𝑃 (𝑦𝑡∣𝑦<𝑡,𝑐)=𝑔 (𝑑𝑡,𝑐)
+where the output of the decoder not only depends on the previous true value as input but is also conditionedon the context vector.
+DeepLOB-Attention[12] With the same idea as the DeepLOB-Seq2Seq model, the difference of the DeepLOB-Attention model is changing the Seq2Seq architecture into Attention. The attention model [46] constructs thecontext vector differently instead of using the last hidden state or the mean of all hidden states. Same asSeq2Seq model, the encoder outputs hidden state ℎ𝑡 and decoder outputs hidden state 𝑑𝑡. The first step is tocompute a similarity score between the hidden state 𝑑𝑡 of the decoder and each encoder state ℎ𝑖, where thesimilarity score is usually calculated by dot product:
+𝑠𝑖=ℎ𝑖𝑇 𝑑𝑡
+And then, normalize the similarity scores to obtain a weight distribution by softmax:
+{𝛼1,𝛼2,…,𝛼𝑆}=softmax ({𝑠1,𝑠2,…,𝑠𝑆})
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 9/32
+
+================================================================================
+Page 10
+================================================================================
+
+(25)
+Finally, generate the context vector from the attention weights:
+𝑐𝑡=
+𝑆
+∑
+𝑖=1
+𝛼𝑖 ℎ𝑖
+After that, the process of producing the output 𝑦𝑡 is the same as the Seq2Seq model.
+4.2 Transformer
+The Transformer [9] has an encoder-decoder structure that relies on the Self-attention mechanism withoutrelying on CNN and RNN. This architecture allows the Transformer to process the long sequence and has noproblem with the vanishing gradient, which means it can model the dependency regardless of the length ofthe input/output. A series of components forms the Transformer: Multi-head Self-attention, positional-wisefeed-forward neural network, layer-normalization, and residual connection. According to Vaswani et al. [9]
+and Farsani et al. [47], the architecture of the Transformer for financial time series prediction is shown inFig.8.
+Figure 8:Transformer Structure based on Vaswani et al. [9] and Farsani et al. [47].
+There is a slight difference between this transformer and the vanilla one used for NLP tasks. The word em-bedding process is omitted, and the financial time series is fed into the transformer using time-stamp encod-ing. The details of time-stamp encoding will be explained in Section 4.2.2.
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 10/32
+
+================================================================================
+Page 11
+================================================================================
+
+(26)
+(27)
+(28)
+(29)
+(30)
+(31)
+4.2.1 Multi-head Self-attention Mechanism
+Self-attention is a mechanism for finding the relevant vector in a sequence. The target of Self-attention is tocompute the attention score and then extract information based on the score. According to Vaswani et al. [9],the calculations of scaled dot-production Self-attention are as follows: First, to compute the attention score,multiply the input vector 𝐼 with different learnable weight matrices 𝑊𝑞 and 𝑊𝑘 to obtain the query and key:
+𝑄=𝑊𝑞 𝐼
+𝐾=𝑊𝑘 𝐼
+The next step is to calculate the attention matrix, where each element in it is an attention score:
+𝐴=softmax 
+⎛⎜⎝
+𝑄 𝐾𝑇
+√𝑑𝑘
+⎞⎟⎠
+Where 𝑑𝑘 is the dimension of query and key.Lastly, multiply the attention matrix with the values, and the final output can be obtained:
+ Attention  (𝑄,𝐾,𝑉)=softmax 
+⎛⎜⎝
+𝑄 𝐾𝑇
+√𝑑𝑘
+⎞⎟⎠ 𝑉
+The output is the weighted sum of the relevance of different vectors in the sequence. In the implementationof the transformer, Multi-head Self-attention is used, which is beneficial for finding different types ofrelevance.
+4.2.2 Learnable Time-stamp Encoding
+Different from the fixed sinusoid encoding used in the vanilla transformer [9], timestamp encoding from the
+Informer [33] is more informative for time series data and a similar method is applied in Autoformer [34]and FEDformer [36]. The timestamp encoding method uses learnable embedding layers to produce posi-tional information to add to the sequence, where timestamp information like a minute, hour, week, year andextra time stamps like event or holiday can be incorporated. To obtain the time-step encoding, the first step isto calculate fixed sinusoid encoding. Assume the input is 𝑋𝑡={𝑥1,𝑥2,…,𝑥𝐿𝑥∣𝑥𝑖∈𝑅𝑑𝑥}𝑡 at timestamp 𝑡 ,
+where 𝐿𝑥 is the sliding window size and 𝑑𝑥 is the model dimensionality, then the encoding is calculated asfollows:
+𝑃 𝐸𝑝 𝑜 𝑠,2 𝑖=sin 
+⎛⎜⎜⎜⎝
+𝑝 𝑜 𝑠
+(2 𝐿𝑥)2 𝑖𝑑 
+⎞⎟⎟⎟⎠
+𝑃 𝐸𝑝 𝑜 𝑠,2 𝑖+1=cos 
+⎛⎜⎜⎜⎝
+𝑝 𝑜 𝑠
+(2 𝐿𝑥)2 𝑖𝑑 
+⎞⎟⎟⎟⎠
+And then, project the original input 𝑥𝑖𝑡 into the model dimensionality vector 𝑢𝑖𝑡 using convolutional filters.The next step is to use a learnable embedding layer SE𝑝 𝑜 𝑠 to incorporate the timestamp information. Thestructure of the timestamp embedding is shown in Fig.9.
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 11/32
+
+================================================================================
+Page 12
+================================================================================
+
+(32)
+Figure 9:Time-stamp embeddings based on Zhou et al. [33].
+Finally, add up all the calculation results above to get the final encoding:
+𝑋𝑓 𝑒 𝑒 𝑑 [𝑖]𝑡 =𝛼 𝑢𝑖𝑡+𝑃 𝐸(𝐿𝑥×(𝑡−1)+𝑖)+∑
+𝑝 [𝑆 𝐸𝐿𝑥 (𝑡−1)+𝑖]𝑝
+Where 𝑖∈{1,…,𝐿𝑥} and 𝛼 is the parameter balancing the ratio of scalar projection and embeddings.
+4.2.3 Alternative Transformer-based Models
+As mentioned in Section 2, several new Transformer-based models [32, 31, 33, 34, 36] are dedicated for longtime series forecasting. However, they have not been tested on financial time series data. In this study, theyare chosen as the alternative models to compare with the vanilla Transformer and LSTM. These models andtheir relationships are briefly summarized as follows (see Figure 10):
+Figure 10:Architecture designs for alternative Transformer models sourced from Zeng et al.[48]. In step (1)and (2), the operations inside the solid box are required, while those in the dashed box can be appliedoptionally.
+LogTrans Li et al. [31] put forward LogTrans with convolutional Self-attention generating queries and keysin the Self-attention layer. This work makes the convolutional layer widely used in the attention module inthe later studies [33, 34, 36]. It uses a Logsparse mask to reduce the time complexity from 𝑂 (𝐿2) to
+𝑂 (𝐿 log (𝐿)).
+Reformer Reformer [32] changes the time complexity of the Transformer to 𝑂 (𝐿 log (𝐿)) as well by using sen-sitive hashing instead of dot-product in the calculate of attention. It also replaces the residual connection inthe vanilla Transformer with a reversible residual connection, which makes the Transformer more efficient.
+Informer Although Reformer and LogTrans reduced the time complexity to 𝑂 (𝐿 log (𝐿)), the memory con-sumption is still the same, so the efficiency gain is not high. Also, LogTrans and Reformer use iterated multi-step prediction (IMS), generating a single prediction in each timestamp and using that prediction iterativelyto obtain multi-step prediction [49], which suffers from error accumulation. Informer [33] proposed by Zhou
+et al. employs a ProbSparse Self-attention mechanism to achieve 𝑂 (𝐿 log (𝐿)) time and memory complexity.They propose an innovative generative style decoder to make direct multi-step(DMS) prediction, which is togenerate the multi-step prediction at once in one forward procedure [50]. This method speed up the long-term forecast compared to the LogTrans and Reformer. The DMS forecast method and learnable timestampencoding are applied in the Autoformer [34] and FEDformer [36].
+Autoformer The optimization of Transformer on time series prediction is a trade-off between efficiency andinformation utilization. Depending on the structure of Informer, Autoformer [34] reduced the time complex-
+ity with an Auto-Correlation mechanism rather than making Self-attention sparse in LogTrans and Informer,which can preserve the information well and measure the sub-series dependency. Time series decompositionis a method commonly used in time series analysis to deconstruct the time series into several components [51, 52]. The underlying temporal pattern can be revealed from these components to make the time seriesmore predictable [53]. Autoformer first embeds the time series decomposition as an inner neural block to
+derive the trend-cyclical component from the input sequence and the seasonal component from the differ-
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 12/32
+
+================================================================================
+Page 13
+================================================================================
+
+(33)
+ence between the trend-cyclical component and the input sequence. This new decomposition architecturecan deconstruct time series to use the series periodicity to update attention.
+FEDformer Based on the decomposition architecture of Autoformer, Zhou et al. [36] builds the FEDformer touse Fourier transform and Wavelet transform, which are in the frequency domain as a new decompositionmethod to reach linear complexity 𝑂 (𝐿). .
+5 Experimentation Result and Evaluation
+5.1 Comparison of LOB Mid-Price Prediction
+The first task to compare transformer versus LSTM is the mid-price prediction. In this task, predicting the ab-solute value of the mid-price is similar to the previous work’s [31, 33, 34, 36, 35] experiment on non-financial
+datasets.
+5.1.1 Experiment Setting for LOB Mid-Price Prediction
+Dataset All the experiments are based on cryptocurrency LOB data, which are collected in real-time fromBinance Exchange using cryptofeed [54] WebSocket API and saved to the database using kdb+tick triplet [55].In this experiment, one-day LOB data of product BTC-USDT (Bitcoin-U.S. dollar tether) on 2022.07.15. contain-ing 863397 ticks is utilized. The time interval between each ticks is not evenly spaced. The time interval is 0.1second on average. The first 70% data is used to construct the training set, and the rest 10% and 20% of dataare used for validation and testing. The reason why only using one day of LOB data is that it is enough totrain for a task prediction for absolute value without overfitting according to previous works’ experimentson non-financial datasets.Models For the comparison purpose, I choose canonical LSTM and vanilla Transformers along with fourTransformer-based models: FEDformer [36], Autoformer [34], Informer [33] and Reformer [32]. For the im-
+plementation of Transformer-based models, they are taken from open-source code repositories [56, 57]. Theimplementation of vanilla Transformer [9], Reformer [32], Informer [33] and Autoformer [34] are from theAutoformer repository [56]. The implementation of FEDformer [36] is from its own repository [57].
+Training setting The dataset is normalized by the z-score normalization method. The validation set and thetest set are normalized by the mean and standard deviation of the training set. All the models are trained for10 epochs using the Adaptive Momentum Estimation optimizer and L2 loss with early stopping. The batchsize is 32, and the initial learning rate is 1e-4. All models are implemented by Pytorch [58] and trained on asingle NVIDIA RTX A5000 GPU with 24 GB memory.
+5.1.2 Result and Analysis for LOB Mid-Price Prediction
+ModelsFEDformerAutoformerInformerReformerTransformerLSTMMetricsMSEMAEMSEMAEMSEMAEMSEMAEMSEMAEMSEMAE96 0.07930.1790.09260.2011.4110.5432.1860.6192.8360.6960.1040.204
+192 0.155 0.257 0.1760.2791.7820.7491.8420.8242.7990.8320.1950.287
+336 0.274 0.348 0.3190.3762.0800.8309.2181.9471.4560.6650.3150.369
+720 0.608 0.514 0.6430.5392.8081.09372.576.8244.3061.2970.7710.587
+Table 1:Mid price prediction result with different prediction lengths 𝑘∈{96,192,336,720} in test set. Theinput window size is set to 96 (MSE’s unit is in 10−2 and MAE’s unit is in 10−1).
+Quantitative result To evaluate the performance of different models, following the previous works [31, 33,
+34, 36, 35], the performance metrics consist of Mean Square Error (MSE) and Mean Absolute Error (MAE),representing the prediction error. Lower MSE or MAE indicates the model has less prediction error. MSE andMAE are calculated by:
+𝑀 𝑆 𝐸=1𝑛 
+𝑛
+∑
+𝑖=1
+(𝑌𝑖−^𝑌𝑖)2
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 13/32
+
+================================================================================
+Page 14
+================================================================================
+
+(34)𝑀 𝐴 𝐸=1𝑛 
+𝑛
+∑
+𝑖=1
+|𝑌𝑖−^𝑌𝑖|
+where 𝑌𝑖 is the true value and ^𝑌𝑖 is the predicted value. 𝑛 is the number of ticks.The results of all models are shown in Table 1. From the table, these outcomes can be summarized:1. Both FEDformer and Autoformer outperform LSTM and FEDformer has the best performance in all theprediction lengths. FEDformer and Autoformer give a large increase in performance in terms of MSE andMAE compared to LSTM. For FEDformer, it gives 24% (0.104→0.0793) MSE reduction on 96 prediction lengthand 21% (0.771→0.608) on 336 prediction length. For Autoformer, it gives 11% (0.104→0.0926) MSE reductionon 96 prediction length and 16% (0.771→0.643) MSE reduction on 336 prediction length. These results showthat both Autoformer and FEDformer perform well in terms of MSE and MAE because of their low error andlong-term robustness.2. Although FEDformer and Autoformer’s MSE and MAE are low on this task, LSTM is relatively not bad onmid-price prediction. LSTM outperforms the other three models: Informer, Reformer, and vanillaTransformer, which indicates that LSTM is robust in handling LOB data, while transformer-based models re-quire lots of modification to perform well.3. Vanilla Transformer model has worse performance on prediction lengths 96 and 192 and Reformer hasworse performance on prediction lengths 336 and 720 because they suffered from error accumulation duringthe IMS prediction process. Informer’s worse performance than LSTM is mainly due to its sparse version ofattention, leading to information loss on the time series.
+Figure 11:Illustration of normalized forecasting outputs with 96 input window size and {96,192,336,720}prediction lengths. Each timestamp is one tick. Reformer’s results are not plotted in the lower two panels forbetter visualisation.
+Qualitative results The prediction results of compared models on all the prediction horizons are shown inFigure 11. When the prediction horizon is 96, Autoformer and Reformer are able to generate a proper trendfor the future mid-price, while other models generate almost a flat line as predictions. On the predictionhorizon of 192, almost all the models’ predictions plateau except the Reformer, but Reformer’s result becomesmore stochastic than the prediction horizon of 96. For larger prediction horizons 336 and 720, all the modelscan hardly predict a proper trend and Reformer’s result in not plotted because it becomes too stochastic.
+Based on the qualitative results above, although Autoformer and FEDformer outperform LSTM in terms ofMSE and MAE, their actual prediction performance is far more inadequate for high-frequency trading. Theanalysis from Figure 11 is just “eyeballing” whether the model is good. In this case, another formal metricout of sample 𝑅2 is added here to judge the prediction quality. According to Lewis-Beck [59], 𝑅2 determine
+how well the prediction result 𝑌 can be explained by the input 𝑋, and higher 𝑅2 indicates the model has abetter fit for the predicted value. Out of sample 𝑅2 is defined by:
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 14/32
+
+================================================================================
+Page 15
+================================================================================
+
+(35)𝑅2=1−∑𝑖=1𝑛 (𝑌𝑖−^𝑌𝑖)2
+∑𝑖=1𝑛 (𝑌𝑖−¯𝑌)
+where ¯𝑌=1𝑛 ∑𝑖=1𝑛 𝑌𝑖; ^𝑌𝑖 is the predicted value and 𝑌𝑖 is the ground truth.
+Here the out-of-sample 𝑅2 is calculated based on the price difference. Please note that the price differencehere differs from the one mentioned in Section 3.3. The price difference here is calculated from the absoluteprice prediction result, while the one in Section 3.3 is the direct prediction target. The result of 𝑅2 is shown inTable 2.
+ModelsAutoformerFEDformerInformerReformerLSTMTransformer96 -0.753 -0.237-43.811 -69.080-0.946-87.899192 -0.596 -0.205-25.281-26.792-0.644-43.368336 -1.032 -0.364-20.123-63.252-0.414-13.035720 -0.521 -0.189-7.760-137.322-0.589-16.314
+Table 2:Average of out of sample 𝑅2 result with different prediction lengths 𝑘∈{96,192,336,720}.
+From the table, all the out-of-sample 𝑅2 values are negative for all models. However, according to Lewis-Beck[59], 𝑅2 at least needs to be larger than zero to indicate that input 𝑋 can explain output 𝑌. This indicates that
+predictions for absolute mid-price are useless for trading purposes. The metrics of MSE and MAE obscure thereal quality of prediction results, highlighting the importance of 𝑅2 calculated based on the price difference.
+To sum up, although Autoformer and FEDformer have lower MSE and MAE than LSTM, their prediction re-sult is not helpful and practical for trading. The more sensible way is to directly use the price difference asthe prediction target.
+5.2 Comparison of LOB Mid-Price Diff Prediction
+Both transformer-based models and LSTM are unable to generate the satisfactory result on the mid-priceprediction, so this task turns to the mid-price difference prediction. The mid-price difference is a useful al-pha-term structure in trading for traders and market makers [14].
+5.2.1 Experiment Setting for LOB Mid-Price Diff Prediction
+Dataset The dataset for this experiment is collected the same way as the last experiment, but the dataset sizebecomes larger to avoid overfitting. In this experiment, four days of LOB data for the product BTC-USDT from2022.07.03 (inclusive) to 2022.07.06 (inclusive) is used, containing 3432211 ticks. The first 80% of data is usedas a training set, and the rest 20% is split in half for validation and testing.Models and Limitations Five models are being compared in this experiment: canonical LSTM [39], vanillatransformer [9], CNN-LSTM (DeepLOB [11] model used for regression), Informer [33] and Reformer [32].
+State-of-the-art FEDformer and Autoformer are not compared in this task because their time decompositionstructure is limited in handling price difference series. As mentioned in Section 3.4, the price difference is ap-proximately stationary. The time decomposition method is useful for the non-stationary time series, such asthe mid-price series, where it can extract meaningful patterns. In contrast, the price difference series is ap-proximately stationary, and little meaningful information can be extracted from it. Therefore, FEDformerand Autoformer can only produce a poor result in this task and will not be compared below.Training settings the training setting is the same as the last experiment.
+5.2.2 Result and analysis for LOB Mid-Price Diff Prediction
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 15/32
+
+================================================================================
+Page 16
+================================================================================
+
+Figure 12:Performance of price difference prediction with input window size 100 and prediction length 100.Negative data points are not plotted for ease of visualization.
+Following the previous works [14], out of sample 𝑅2 is the evaluation metric for this task. The performance
+of all the models is shown in Figure 12. The canonical LSTM achieves the best performance among all mod-els, which reaches the highest 𝑅2 around 11.5% in forecast length 5 to 15. For CNN-LSTM, it has comparableperformance to LSTM. On the other hand, Informer, Reformer and Transformer have worse 𝑅2 than LSTM,but their 𝑅2 trend is similar. In short, for the price difference prediction task, LSTM-based models is more sta-ble and more robust than Transformer-based models. This result is in expectation because Reformer,Informer and Transformer already have worse performance than LSTM in mid-price prediction task becauseof their shortcomings. At the same time, the state-of-art FEDformer and Autoformer cannot be applied be-cause of their limitation. In order to let these state-of-the-art transformer-based models make a meaningfulprediction, a new structure is designed in the next part, and it is applied to the price movement predictiontask.
+5.3 Comparison of LOB Mid-Price Movement Prediction
+5.3.1 Innovative Architecture on Transformer-based Methods
+The alternative Transformer-based models mentioned in Section 4.2.3 mainly focus on the long time seriesforecasting problem, which is a regression task. For the LOB data, it is easy to adapt these models for themid-price prediction and mid-price difference prediction because both are regression problems. For the mid-price movement prediction task, the model needs to produce a classification result for the future, and thereare few existing Transformer models specialized available for this task. In contrast, most of the Transformer-based models are designed for classification tasks without forecasting, such as sentiment analysis, spam de-tection and pos-tagging in NLP. In this case, adapting the existing Transformer-based models to do pricemovement forecasting is necessary. I first adapt Transformer-based models in price movement forecastingand want to facilitate transformer development in this specific task. The new architecture of the trans-former-based model is shown in Figure 13. The details are explained as follows:Predicting the next mid-price movement based on the past price and volume information is an one stepahead of prediction.
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 16/32
+
+================================================================================
+Page 17
+================================================================================
+
+(36)
+Figure 13:New architecture of transformer-based model for LOB mid-price movement prediction.
+A straightforward method to adapt the transformer-based model is to pass the next predicted mid-price intoa softmax activation. However, this method performs poorly because it only considers the past mid-price in-formation and ignores future ones. It is worth noting that in the labelling process in Section 3.4, previous andnext 𝑘 mid-price information are utilized. In this case, I adapt the existing transformer-based models to feedthe whole predicted mid-price sequence into a linear layer and finally pass through a softmax activationfunction to generate price movement output. This adaptation will benefit those transformer-based modelsusing the DMS forecasting method because they have fewer errors in the long-time series prediction process.
+5.3.2 DLSTM: Innovation on LSTM-based Methods
+Inspired by the Dlinear model [48] and Autoformer, combining the merits of time decomposition with theLSTM, a new model named DLSTM is designed. DLSTM is designed based on these three observations: Firstly,the time series decomposition method is capable of increasing the performance, especially embedding thisprocess by neural blocks in previous works [11, 34, 36]. Secondly, LSTM is a robust and simple model for
+multiple forecasting tasks. Thirdly, Dlinear beats other Transformer-based models in some long time seriesforecasting tasks thanks to the time series decomposition method and DMS prediction. However, predictingprice movement is one step ahead prediction, where the model will not suffer from the error accumulationeffect. In this case, it is sensible to replace linear with LSTM, because LSTM is a model well-known betterthan linear in handing time series.
+Figure 14:Architecture of DLSTM
+The architecture of DLSTM is shown in Figure 14. The main difference between Dlinear and DLSTM is thatthe LSTM layers replace the Linear layer. According to the time decomposition method introduced inAutoformer [34], in the prediction process, assume there is a time series 𝑋𝑇=(𝑥1,𝑥2,…,𝑥𝑇), first decom-pose it into Trend series by the moving average:
+𝑋𝑡=𝐴 𝑣 𝑔 𝑃 𝑜 𝑜 𝑙 (𝑃 𝑎 𝑑 𝑑 𝑖 𝑛 𝑔 (𝑋𝑇))
+where 𝐴 𝑣 𝑔 𝑃 𝑜 𝑜 𝑙 (⋅) is the average pooling operation and the 𝑃 𝑎 𝑑 𝑑 𝑖 𝑛 𝑔 (⋅) is to fix the input length.And then the Remainder series is calculated by 𝑋𝑟=𝑋𝑇−𝑋𝑡. After that, these two series are inputted intotwo LSTM layers. Finally, the hidden states 𝐻𝑡 and 𝐻𝑟 produced by two LSTM layers will be added togetherand then pass through a linear and softmax activation to generate the final price movement result.
+5.3.3 Setting for LOB Mid-Price Movement Prediction
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 17/32
+
+================================================================================
+Page 18
+================================================================================
+
+Dataset In this experiment, the largest dataset among three tasks is utilized to avoid over-fitting and test themodel’s robustness. The whole dataset contains 12 days of LOB data of product ETH-USDT (Ethereum-U.S.dollar tether) from 2022.07.03 (inclusive) to 2022.07.14 (inclusive), containing 10255144 ticks. The trainingand testing data are taken from the first six days and the last three days, and the left data are used for valida-tion. The test set is also used for the simple trading simulation.Models Thanks to the innovative structure mentioned in Section 5.3.1, most of the transformer-based modelscan be adapted and applied in this task for comparison, which are: Vanilla Transformer [9], Reformer [32],Informer [33], Autoformer [34], FEDformer [36]. On the other hand, all the LSTM-based models are com-
+pared in this task as well, which are: canonical LSTM [39], DLSTM, DeepLOB [11], DeepLOB-Seq2Seq [12],DeepLOB-Attention [12]. Besides these models, a simple MLP model is built as a baseline. The implementa-
+tion of the Transformer-based models are based on the code repository mentioned above. The implementa-tion of DeepLOB [11], DeepLOB-Seq2Seq [12], DeepLOB-Attention [12] are based on two repositories [60, 61]. For the DLSTM, it is inspired by code of Dlinear[48] model from its repository [62].Training settings The batch size for training is set to 64 and the loss function is changed to Crossentropyloss. Other training settings are the same as the last experiment.
+5.3.4 Result and analysis for LOB Mid-Price Movement Prediction
+The performance of models is evaluated by classification metrics: accuracy and the mean of precision, recalland F1-score. Result are shown in Table 3 and Table 4.
+Model AccuracyPrecisionRecall F1
+Prediction Horizon k = 20MLP 61.58 61.70 61.58 61.47LSTM 62.77 62.91 62.77 62.78DeepLOB 70.29 70.58 70.30 70.24DeepLOB-Seq2Seq\ul70.40\ul70.79\ul70.42\ul70.37DeepLOB-Attention70.04 70.26 70.03 70.01Autoformer 68.89 68.99 68.89 68.91FEDformer 65.37 65.70 65.37 65.20Informer 68.71 68.82 68.72 68.71Reformer 68.01 68.26 68.00 67.95Transformer 67.80 67.99 67.81 67.77DLSTM 73.10 74.01 73.11 73.11
+Prediction Horizon k = 30MLP 59.19 59.30 58.70 58.48LSTM 60.64 60.47 60.45 60.45DeepLOB 67.23 67.26 67.17 67.15DeepLOB-Seq2Seq67.56 67.73 67.53 67.49DeepLOB-Attention67.21 67.39 66.98 66.96Autoformer \ul67.93\ul67.86\ul67.77\ul67.77FEDformer 66.57 66.44 66.05 65.83Informer 65.41 65.33 65.14 65.13Reformer 64.28 64.31 64.08 64.06Transformer 64.25 64.16 64.13 64.13DLSTM 70.61 70.83 70.63 70.59
+Table 3:Experiment results of Mid Price Movement for prediction horizons 20 and 30. Red Bold representsthe best result and \ulblue underline represents the second best result.
+Model AccuracyPrecisionRecallF1Prediction Horizon k = 50MLP 55.65 55.71 55.62 54.98LSTM 62.77 62.91 62.77 62.78DeepLOB 63.32 63.69 63.32 63.37DeepLOB-Seq2Seq63.62 64.04 63.61 63.59DeepLOB-Attention\ul64.05\ul64.19\ul64.04\ul63.94Autoformer 60.17 60.64 60.12 58.40FEDformer 63.46 63.44 63.42 62.52Informer 61.76 61.64 61.74 61.55
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 18/32
+
+================================================================================
+Page 19
+================================================================================
+
+Reformer 60.43 60.79 60.42 60.37Transformer 59.51 59.78 59.51 59.46DLSTM 67.45 67.96 67.45 67.59Prediction Horizon k = 100MLP 57.03 56.03 56.36 56.01LSTM 53.49 52.83 52.82 52.36DeepLOB 58.12 58.50 57.92 57.86DeepLOB-Seq2Seq58.30 58.43 57.93 57.77DeepLOB-Attention59.16 \ul58.59\ul58.65\ul58.50Autoformer \ul59.1858.3458.40 57.83FEDformer 57.97 56.97 56.62 54.14Informer 56.11 56.15 55.85 55.81Reformer 54.92 54.47 54.53 54.47Transformer 55.42 55.04 54.92 54.72DLSTM 63.73 63.02 63.18 63.05
+Table 4:Experiment results of Mid Price Movement for prediction horizons 50 and 100.Red Bold representsthe best result and \ulblue underline represents the second best result.
+A few outcomes can be observed from the result:1. DLSTM outperforms all the previous LSTM-based and Transformer-based models. It achieves the highestaccuracy, precision, recall and F1 score in all the prediction horizons. This result shows that the time seriesdecomposition structure originating from Autoformer can effectively handle time series, especially whencombined with a simple LSTM model. DLSTM is making one step ahead prediction for the mid-price move-ment, so it will not suffer from error accumulation from the DMS prediction process.2. DeepLOB-Attention model has the second best result in horizon 50 and 100 (excluding accuracy).DeepLOB-Seq2Seq has the second best result for prediction horizon 20. This result indicates that the encode-decoder structure and attention mechanism can contribute to the prediction performance because the auto-regressive process can correlate the mid-price movement from different prediction horizons.3. The DeepLOB-Attention and DeepLOB-Seq2Seq performance is comparable to DeepLOB but better thanDeepLOB, especially in the long prediction horizon. This result accords with the result in the previous paper [12], which proves the correctness of the result.4. The Autoformer gets the second-best result in prediction horizon 30. Although it is not the best model, itstill means that Autoformer is usable for the time series prediction, and its time decomposition structure isadequate. The shortcoming of Autoformer and the latest FEDformer is that they are huge models comparedto LSTM, and they need to be fine-tuned to work well in a specific task. In contrast, LSTM-based models’ sizesare much smaller and do not need much hyper-parameters tuning. More analysis of the efficiency will be dis-cussed in the Section 5.3.7.
+To summarize, combing the results of this task and previous tasks, LSTM-based models generally have theiradvantage in financial time series for their robustness and good compatibility. Although the Transformer-based model is large and complicated to tune and requires a long training time, they are still usable for theforecasting task. Furthermore, the research of Transformer-based method in time series prediction is mean-ingful because the time decomposition method from Autoformer contributes back to the original LSTMmodel.
+Figure 15:Confusion matrix of DLSTM model with prediction horizon 20, 30, 50, 100.
+5.3.5 Simple Trading Simulation without transaction cost
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 19/32
+
+================================================================================
+Page 20
+================================================================================
+
+In order to show the models and their predictions are practical and useful in trading, a simple trading simu-lation (backtesting) is designed. Three models with good classification metrics performance are chosen forcomparison: DLSTM, DeepLOB [11], Autoformer [34]. Canonical LSTM [39] and Vanilla Transformer [9] areused as baselines. The three-day test set is used for this trading simulation. To make a fair comparison amongmodels, the trading simulation follows the simple setup in the previous work [11]: The number of shares
+pre-trade 𝜇 (volume) is set to one. At each timestamp, the model will predict the price movement (0: fall, 1:stationary, 2: rise) as a trading signal. When the prediction is 2, enter the long position, and the position isheld until it encounters 0. The same rule is applied to the short position when the prediction is 0, and onlyone direction of position can exist in this simulation trading. A delay is set between the prediction and the or-der execution to simulate the high-frequency trading latency. For example, assume the model generates aprediction 2 at time 𝑡, 𝜇 shares will be bought at time 𝑡+5.
+Forecast HorizonPrediction Horizon = 20Prediction Horizon = 30Prediction Horizon =50Prediction Horizon=100Model CPR SR CPR SR CPR SR CPR SRLSTM 15.396 51.48912.458\ul41.4118.484 28.817 4.914 20.941DLSTM\ul14.96646.94912.63437.4326.19422.0273.215\ul16.346DeepLOB13.859\ul56.09412.789 42.567 5.72621.0142.646 14.992Transformer14.55359.995 \ul12.73741.0446.896\ul28.1472.859 16.981
+Autoformer9.942 32.688 8.617 30.576\ul8.21425.882\ul3.62017.765
+Table 5:Cumulative price returns and annualized sharpe ratio of different models.
+Several assumptions are made for the simulation trading:1) Since the trading product is in cryptocurrency exchange, the trading volume is considerable sufficient inthe market, which means the simulated trades will not have a market impact.2) The focus of this part of the experiment is to show the practicality of the prediction result and make rela-tive comparisons among models instead of inventing a fully developed high-frequency trading strategy.Industrial HFT trading strategies usually require the combination of different prediction signals and preciseentry exit rules [11]. For simplicity, the order is assumed to be executed at the mid-price without transaction
+cost.
+Figure 16:Cumulative return curve for different models in trading simulation.
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 20/32
+
+================================================================================
+Page 21
+================================================================================
+
+(37)
+(38)
+As displayed in Table 5 and Figure 16, each model’s profitability is presented. The performance of simulatedtrading is evaluated by cumulative price return (CPR) and the Annualized Sharpe Ratio (SR). The CPR is for-mulated by:
+𝐶 𝑃 𝑅=
+𝑡
+∑
+1
+𝑠∗𝜇∗(𝑝mid holding ,𝑡−𝑝mid settlement ,𝑡)
+where 𝑠 is the trading position, which is 1 for long position and −1 for short position. 𝜇 is the number ofshares.And the Sharpe Ratio is calculated by:
+𝑆 𝑅=√365×  Average  ( daily  𝐶 𝑃 𝑅) StandardDeviation  ( daily  𝐶 𝑃 𝑅)
+The value of annualized SR is enormous because the assumptions mentioned above are not realistic for prac-tical trading.Based on the results, LSTM based-model’s performance in simulated trading is generally better thanTransformer-based model. The canonical LSTM model achieves highest CPR and SR in prediction horizon 20and 30 and DeepLOB has the best performance in prediction horizon 50. For DLSTM, it has comparable per-formance to canonical LSTM and DeepLOB model. This result shows that the prediction result from LSTM-based models are robust and practical for trading. Autoformer’s CPR is the lowest in prediction horizon 20and 30. The state-of-the-art Autoformer sometimes has even worse performance than the vanillaTransformer in simulated trading, although it obtains a better classification metrics. To summarize, LSTM-based models are relatively the better models for electronic trading.
+5.3.6 Simple Trading Simulation with transaction cost
+In the real-world market, all operations, including buying or selling, need a commission fee, and sometimesthe transaction cost might outweight the return. This section will introduce a hypothetical transaction cost of0.002% to further compare the robustness among different models. The results are shown in Table 6 andFigure 17.
+Forecast HorizonPrediction Horizon = 20Prediction Horizon = 30Prediction Horizon =50Prediction Horizon=100Model CPR SR CPR SR CPR SR CPR SRLSTM \ul2.102\ul15.1601.767 12.429\ul1.596\ul11.5360.778 6.014
+DLSTM 3.039 19.962 2.716 16.523 1.957 12.359 1.180 9.811DeepLOB1.964 15.082\ul1.924\ul13.1281.450 10.273\ul0.823\ul7.993Transformer1.860 13.894 1.561 10.917 1.047 6.612 0.118 -23.496Autoformer0.189 -8.704 0.873 5.118 -0.225 -9.193 -0.061 -14.835
+Table 6:Cumulative price returns and annualized sharpe ratio of different models under 0.002% transactioncost.
+From the table, DLSTM has the highest CPRs and SRs for all the prediction horizons, outperforming all othermodels. This shows DLSTM’s strong profitability and robustness against the risk brought by the transactioncost. LSTM-based methods’ performance is generally better than Transformer-based methods. CanonicalLSTM and DeepLOB achieve the second-best CPRs and SRs in different prediction horizons. This indicatesthat the LSTM-based model’s prediction results are more practical and effective in electronic trading.Interestingly, Transformer-based models’ performance drops significantly under the transaction cost. Thestate-of-the-art Autoformer produces even less profit than vanilla Transformer, yielding negative CPRs andSRs in prediction horizon 50 and 100, although its prediction classification metrics is better thanTransformer.
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 21/32
+
+================================================================================
+Page 22
+================================================================================
+
+Figure 17:Cumulative return curve under 0.002% transaction cost.
+To further investigate the impact of transaction cost on simulated trading. An experiment is extended to seehow the CPR and SR change as the transaction cost increase. The experiment on CPR is done on the three-daytest set from 2022.07.12 (inclusive) to 2022.07.14 (inclusive) as mentioned in Section 5.3.3. The experiment onSR has a longer backtesting period ranging from 2022.07.13 (inclusive) to 2022.07.24 (inclusive) because annu-alized Sharpe Ratio is calculated based on daily CPR, so using a longer backtesting period can produce amore accurate SR. The experiment results are shown in Figure 18 and Figure 19.
+Figure 18:Cumulative price return change with increasing transaction cost (back testing period: 2022.07.12(inclusive) to 2022.07.14 (inclusive)).
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 22/32
+
+================================================================================
+Page 23
+================================================================================
+
+Figure 19:Sharpe ratio change with increasing transaction cost (back testings period: 2022.07.13 (inclusive) to2022.07.24 (inclusive)).
+In terms of the CPR, all models’ CPR decreases as the transaction cost increases. For the prediction horizon 20and 30, DLSTM still outperforms other models when the transaction cost increases. All the models generatecomparable CPR except the Autoformer in the prediction horizon 50 and 100. Autoformer’s CPR is the lowestin all prediction horizons for most transaction cost settings. Regarding the SR, all models’ SR decrease as thetransaction cost increases. However, DLSTM maintains a higher SR than other models as the transaction costincreases. At the same time, for the Autoformer, its SR drops significantly and even becomes the lowest as thetransaction cost increases. Overall, DLSTM keeps its profitability and robustness for different transactioncosts, while the Transformer-based method’s performance can be largely affected by the transaction cost.This result further indicates that the LSTM-based method is superior for electronic trading.
+5.3.7 Efficiency Comparison on Transformers versus LSTM
+MethodMACsParameterTime MemoryTime MemoryTest StepDLSTM6.72 M193.9 k4.4ms1404MiB𝑂 (𝐿) 𝑂 (𝐿) 1DeepLOB36.42 M143.91 k6.3ms2250MiB𝑂 (𝐿) 𝑂 (𝐿) 1Transformer1.25 G10.64 M17.7ms3534MiB𝑂 (𝐿2) 𝑂 (𝐿2) 1Reformer1.17 G5.84 M23.6ms4966MiB𝑂 (𝐿 𝑙 𝑜 𝑔 𝐿) 𝑂 (𝐿2) 1Informer1.15 G11.43 M22.1ms4361MiB𝑂 (𝐿 𝑙 𝑜 𝑔 𝐿) 𝑂 (𝐿 𝑙 𝑜 𝑔 𝐿) 1Autoformer1.25 G10.64M75.2ms5394MiB𝑂 (𝐿) 𝑂 (𝐿) 1FEDformer1.25 G16.47 M38.3ms3556MiB𝑂 (𝐿) 𝑂 (𝐿) 1
+Table 7:Efficiency comparison of Transformer-based and LSTM-based models on price movement prediction.MACs represent the number of Multiply-accumulate operations.
+The efficiency comparison of Transformer-based and LSTM-based models on price movement prediction isshown in Table 7. The comparison is separated into two parts, the left panel is the practical efficiency, andthe right is the theoretical efficiency. The latest transformer-based models have a focus on lowering the timeand memory complexity. Autoformer and FEDformer claim to achieve 𝑂 (𝐿) time and memory complexity intheory. However, their actual inference time and memory consumption are higher than the vanilla trans-former models because of their complex design. For the training process, it usually takes more than 12 hoursto train an Autoformer and FEDformer model, even with the cutting-edge GPU device (e.g., 24GB NVIDIA RTX3090 GPU is used here), which is not efficient to retrain the model on new data. The researchers should re-
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 23/32
+
+================================================================================
+Page 24
+================================================================================
+
+consider the focus of the Transformer-based model on time series application. The time and memory com-plexity is not a big threshold for the vanilla Transformer, where its inference speed and memory consump-tion is acceptable depending on today’s computing power.
+The LSTM-based model has higher efficiency than the Transformer-based model for its low inference timeand small model size, where its theoretical efficiency corresponds to its practical efficiency. This gives theLSTM-based model advantage in high-frequency trading, which requires fast execution speed. This alsoagain emphasizes that LSTM-based models are the better model in electronic trading.
+6 Conclusion and Future work
+This study systematically compares LSTM-based and Transformer-based models among three financial timeseries prediction tasks based on cryptocurrency LOB data. The first task is to predict the LOB mid-price.FEDformer and Autoformer have less error than other models, and LSTM is still a strong model that sur-passes Informer, Reformer and vanilla Transformer. Although the mid-price prediction error is low, the qual-ity of the mid-price prediction result is far from sufficient for practical use in high-frequency trading. Thesecond task is to predict LOB mid-price difference. LSTM-based methods show their robustness in time seriesprediction and perform better than Transformer-based models, which reach the highest 11.5%𝑅2 in around10 prediction steps. State-of-the-art Autoformer and FEDformer are limited in this task because their time de-composition architecture can not handle the difference sequence. However, in a separate study [63], it wasshown that custom transformer configurations can outperform the standard transformers.
+The last task is to predict the LOB mid-price movement. New architecture for the Transformer-based modelis designed for adapting the classification task. A new DLSTM model is proposed combining the merits ofLSTM and time decomposition architecture from Autoformer. DLSTM outperforms all other models in classi-fication metrics, and Autoformer shows comparable performance to LSTM-based models. A simple tradingsimulation is done to verify the practicality of the prediction. LSTM-based models have overall better perfor-mance than Transformer-based models and DLSTM model beats all other models under the transaction cost.
+In conclusion, based on all the experiments on three different tasks, the Transformer-based model can onlyoutperform LSTM-based models by a large margin in terms of the limited metrics for mid-price prediction. Incomparison, the LSTM-based model is still dominant in the later two tasks, so LSTM-based models are gener-ally the better model in financial time series prediction for electronic trading.
+For future research, applying LSTM-based and Transformer-based models in Deep Reinforcement Learning(DRL) can be a proper direction. A complete high-frequency trading strategy usually requires the combina-tion of different prediction signals and needs an experienced trader to control the take-profit and stop-loss.In this case, using DRL to generate the optimal trading strategy directly can get us one step closer to the ac-tual trading.
+References
+Eugene F. Fama.Efficient capital markets: A review of theory andempirical work.The Journal of finance (New York), 25(2):383–, 1970.ISSN 0022-1082.
+John J. Murphy.Study guide for Technical analysis of the financialmarkets : a comprehensive guide to tradingmethods and applications.New York Institute of Finance, New York, 1999.ISBN 0735200653.
+Fama [1970]
+Murphy [1999]
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 24/32
+
+================================================================================
+Page 25
+================================================================================
+
+Constance M. Brown.Mastering elliott wave principle elementaryconcepts, wave patterns, and practice exercises.Bloomberg financial series. Wiley, Hoboken, N.J,1st edition edition, 2012.ISBN 1-280-67304-4.
+Carolyn Boroden.Fibonacci trading: how to master the time and priceadvantage.Mcgraw-hill New York, NY, 2008.
+David. Ruppert.Statistics and Data Analysis for FinancialEngineering with R examples.Springer Texts in Statistics. Springer New York,New York, NY, 2nd ed. 2015. edition, 2015.ISBN 1-4939-2614-4.
+Adebiyi A. Ariyo, Adewumi O. Adewumi, andCharles K. Ayo.Stock price prediction using the arima model.In 2014 UKSim-AMSS 16th International Conferenceon Computer Modelling and Simulation, pages 106–112, 2014.doi: 10.1109/UKSim.2014.67.
+Victor Carbune, Pedro Gonnet, Thomas Deselaers,Henry A. Rowley, Alexander N. Daryin, MarcosCalvo, Li-Lun Wang, Daniel Keysers, Sandro Feuz,and Philippe Gervais.Fast multi-language lstm-based onlinehandwriting recognition.CoRR, abs/1902.10525, 2019.URL http://arxiv.org/abs/1902.10525.
+Hagen Soltau, Hank Liao, and Hasim Sak.Neural speech recognizer: Acoustic-to-word lstmmodel for large vocabulary speech recognition,2016.URL https://arxiv.org/abs/1610.09975.
+Ashish Vaswani, Noam Shazeer, Niki Parmar, JakobUszkoreit, Llion Jones, Aidan N. Gomez, LukaszKaiser, and Illia Polosukhin.Attention is all you need.CoRR, abs/1706.03762, 2017.URL http://arxiv.org/abs/1706.03762.
+Justin Sirignano and Rama Cont.Universal features of price formation in financialmarkets: perspectives from deep learning, 2018.URL https://arxiv.org/abs/1803.06917.
+Zihao Zhang, Stefan Zohren, and Stephen Roberts.DeepLOB: Deep convolutional neural networks forlimit order books.IEEE Transactions on Signal Processing,67(11):3001–3012, jun 2019a.doi: 10.1109/tsp.2019.2907260.URLhttps://doi.org/10.1109%2Ftsp.2019.2907260.
+Brown [2012]
+Boroden [2008]
+Ruppert [2015]
+Ariyo et al. [2014]
+Carbune et al. [2019]
+Soltau et al. [2016]
+Vaswani et al. [2017]
+Sirignano and Cont [2018]
+Zhang et al. [2019a]
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 25/32
+
+================================================================================
+Page 26
+================================================================================
+
+Zihao Zhang and Stefan Zohren.Multi-horizon forecasting for limit order books:Novel deep learning approaches and hardwareacceleration using intelligent processing units.CoRR, abs/2105.10430, 2021.URL https://arxiv.org/abs/2105.10430.
+Avraam Tsantekidis, Nikolaos Passalis, AnastasiosTefas, Juho Kanniainen, Moncef Gabbouj, andAlexandros Iosifidis.Using deep learning for price prediction byexploiting stationary limit order book features,2018.URL https://arxiv.org/abs/1810.09965.
+Petter N. Kolm, Jeremy D. Turiel, and NicholasWestray.Deep order flow imbalance: Extracting alpha atmultiple horizons from the limit order book.Econometric Modeling: Capital Markets - PortfolioTheory eJournal, 2021.
+Murtaza Roondiwala, Harshal Patel, and ShraddhaVarma.Predicting stock prices using lstm.International Journal of Science and Research(IJSR), 6, 04 2017.doi: 10.21275/ART20172755.
+Jian Cao, Zhi Li, and Jian Li.Financial time series forecasting model based onceemdan and lstm.Physica A: Statistical Mechanics and itsApplications, 519:127–139, 2019.ISSN 0378-4371.doi: https://doi.org/10.1016/j.physa.2018.11.061.URLhttps://www.sciencedirect.com/science/article/pii/S5.
+Wei Bao, Jun Yue, and Yulei Rao.A deep learning framework for financial timeseries using stacked autoencoders and long-shortterm memory.PLOS ONE, 12(7):1–24, 07 2017.doi: 10.1371/journal.pone.0180944.URLhttps://doi.org/10.1371/journal.pone.0180944.
+Sreelekshmy Selvin, R Vinayakumar, E. AGopalakrishnan, Vijay Krishna Menon, and K. P.Soman.Stock price prediction using lstm, rnn and cnn-sliding window model.In 2017 International Conference on Advances inComputing, Communications and Informatics(ICACCI), pages 1643–1647, 2017.doi: 10.1109/ICACCI.2017.8126078.
+Thomas Fischer and Christopher Krauss.Deep learning with long short-term memorynetworks for financial market predictions.European Journal of Operational Research,270(2):654–669, 2018.ISSN 0377-2217.
+Zhang and Zohren [2021]
+Tsantekidis et al. [2018]
+Kolm et al. [2021]
+Roondiwala et al. [2017]
+Cao et al. [2019]
+Bao et al. [2017]
+Selvin et al. [2017]
+Fischer and Krauss [2018]
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 26/32
+
+================================================================================
+Page 27
+================================================================================
+
+doi: https://doi.org/10.1016/j.ejor.2017.11.054.URLhttps://www.sciencedirect.com/science/article/pii/S2.
+Sima Siami-Namini, Neda Tavakoli, andAkbar Siami Namin.A comparative analysis of forecasting financialtime series using arima, lstm, and bilstm.CoRR, abs/1911.09512, 2019.URL http://arxiv.org/abs/1911.09512.
+Sangyeon Kim and Myungjoo Kang.Financial series prediction using attention lstm,2019.URL https://arxiv.org/abs/1902.10877.
+Xuan Zhang, Xun Liang, Aakas Zhiyuli, ShusenZhang, Rui Xu, and Bo Wu.AT-LSTM: An attention-based LSTM model forfinancial time series prediction.IOP Conference Series: Materials Science andEngineering, 569(5):052037, jul 2019b.doi: 10.1088/1757-899x/569/5/052037.URL https://doi.org/10.1088/1757-899x/569/5/052037.
+Xiaokang Hu.Stock price prediction based on temporal fusiontransformer.In 2021 3rd International Conference on MachineLearning, Big Data and Business Intelligence(MLBDBI), pages 60–66, 2021.doi: 10.1109/MLBDBI54094.2021.00019.
+Sashank Sridhar and Sowmya Sanagavarapu.Multi-head self-attention transformer for dogecoinprice prediction.In 2021 14th International Conference on HumanSystem Interaction (HSI), pages 1–6, 2021.doi: 10.1109/HSI52170.2021.9538640.
+Priyank Sonkiya, Vikas Bajpai, and AnukritiBansal.Stock price prediction using bert and gan, 2021.URL https://arxiv.org/abs/2107.09055.
+Surafel M. Lakew, Mauro Cettolo, and MarcelloFederico.A comparison of transformer and recurrentneural networks on multilingual neural machinetranslation, 2018.URL https://arxiv.org/abs/1806.06957.
+Shigeki Karita, Nanxin Chen, Tomoki Hayashi,Takaaki Hori, Hirofumi Inaguma, Ziyan Jiang,Masao Someki, Nelson Enrique Yalta Soplin,Ryuichi Yamamoto, Xiaofei Wang, ShinjiWatanabe, Takenori Yoshimura, and WangyouZhang.A comparative study on transformer vs RNN inspeech applications.In 2019 IEEE Automatic Speech Recognition andUnderstanding Workshop (ASRU). IEEE, dec 2019.
+Siami-Namini et al. [2019]
+Kim and Kang [2019]
+Zhang et al. [2019b]
+Hu [2021]
+Sridhar and Sanagavarapu [2021]
+Sonkiya et al. [2021]
+Lakew et al. [2018]
+Karita et al. [2019]
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 27/32
+
+================================================================================
+Page 28
+================================================================================
+
+doi: 10.1109/asru46091.2019.9003750.URLhttps://doi.org/10.1109%2Fasru46091.2019.9003750.
+Qingsong Wen, Tian Zhou, Chaoli Zhang, WeiqiChen, Ziqing Ma, Junchi Yan, and Liang Sun.Transformers in time series: A survey, 2022.URL https://arxiv.org/abs/2202.07125.
+Ilya Sutskever, Oriol Vinyals, and Quoc V. Le.Sequence to sequence learning with neuralnetworks, 2014.URL https://arxiv.org/abs/1409.3215.
+Tom B. Brown, Benjamin Mann, Nick Ryder,Melanie Subbiah, Jared Kaplan, Prafulla Dhariwal,Arvind Neelakantan, Pranav Shyam, Girish Sastry,Amanda Askell, Sandhini Agarwal, Ariel Herbert-Voss, Gretchen Krueger, Tom Henighan, RewonChild, Aditya Ramesh, Daniel M. Ziegler, JeffreyWu, Clemens Winter, Christopher Hesse, MarkChen, Eric Sigler, Mateusz Litwin, Scott Gray,Benjamin Chess, Jack Clark, Christopher Berner,Sam McCandlish, Alec Radford, Ilya Sutskever, andDario Amodei.Language models are few-shot learners, 2020.URL https://arxiv.org/abs/2005.14165.
+Shiyang Li, Xiaoyong Jin, Yao Xuan, Xiyou Zhou,Wenhu Chen, Yu-Xiang Wang, and Xifeng Yan.Enhancing the locality and breaking the memorybottleneck of transformer on time seriesforecasting, 2019.URL https://arxiv.org/abs/1907.00235.
+Nikita Kitaev, Ł ukasz Kaiser, and AnselmLevskaya.Reformer: The efficient transformer, 2020.URL https://arxiv.org/abs/2001.04451.
+Haoyi Zhou, Shanghang Zhang, Jieqi Peng, ShuaiZhang, Jianxin Li, Hui Xiong, and Wancai Zhang.Informer: Beyond efficient transformer for longsequence time-series forecasting, 2020.URL https://arxiv.org/abs/2012.07436.
+Haixu Wu, Jiehui Xu, Jianmin Wang, andMingsheng Long.Autoformer: Decomposition transformers withauto-correlation for long-term series forecasting,2021.URL https://arxiv.org/abs/2106.13008.
+Shizhan Liu, Hang Yu, Cong Liao, Jianguo Li,Weiyao Lin, Alex X. Liu, and Schahram Dustdar.Pyraformer: Low-complexity pyramidal attentionfor long-range time series modeling andforecasting.In International Conference on LearningRepresentations, 2022.URL https://openreview.net/forum?id=0EXmFzUn5I.
+Wen et al. [2022]
+Sutskever et al. [2014]
+Brown et al. [2020]
+Li et al. [2019]
+Kitaev et al. [2020]
+Zhou et al. [2020]
+Wu et al. [2021]
+Liu et al. [2022]
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 28/32
+
+================================================================================
+Page 29
+================================================================================
+
+Tian Zhou, Ziqing Ma, Qingsong Wen, Xue Wang,Liang Sun, and Rong Jin.Fedformer: Frequency enhanced decomposedtransformer for long-term series forecasting,2022a.URL https://arxiv.org/abs/2201.12740.
+Martin D. Gould, Mason A. Porter, Stacy Williams,Mark McDonald, Daniel J. Fenn, and Sam D.Howison.Limit order books, 2010.URL https://arxiv.org/abs/1012.0349.
+Avraam Tsantekidis, Nikolaos Passalis, AnastasiosTefas, Juho Kanniainen, Moncef Gabbouj, andAlexandros Iosifidis.Forecasting stock prices from the limit order bookusing convolutional neural networks.In 2017 IEEE 19th Conference on BusinessInformatics (CBI), volume 01, pages 7–12, 2017.doi: 10.1109/CBI.2017.23.
+Sepp Hochreiter and Jürgen Schmidhuber.Long Short-Term Memory.Neural Computation, 9(8):1735–1780, 11 1997.ISSN 0899-7667.doi: 10.1162/neco.1997.9.8.1735.URLhttps://doi.org/10.1162/neco.1997.9.8.1735.
+Ian Goodfellow, Yoshua Bengio, and AaronCourville.Deep Learning. MIT Press, 2016.http://www.deeplearningbook.org.
+David E. Rumelhart, Geoffrey E. Hinton, andRonald J. Williams.Learning representations by back-propagatingerrors.Nature, 323:533–536, 1986.
+F.A. Gers, J. Schmidhuber, and F. Cummins.Learning to forget: continual prediction with lstm.In 1999 Ninth International Conference on ArtificialNeural Networks ICANN 99. (Conf. Publ. No. 470),volume 2, pages 850–855 vol.2, 1999.doi: 10.1049/cp:19991218.
+Alex Graves.Generating sequences with recurrent neuralnetworks, 2013.URL https://arxiv.org/abs/1308.0850.
+Roel Oomen and Jim Gatheral.Zero-intelligence realized variance estimation.Finance and Stochastics, 14:249–283, 04 2010.doi: 10.1007/s00780-009-0120-1.
+Kyunghyun Cho, Bart van Merrienboer, ÇaglarGülçehre, Fethi Bougares, Holger Schwenk, andYoshua Bengio.Learning phrase representations using RNNencoder-decoder for statistical machinetranslation.CoRR, abs/1406.1078, 2014.URL http://arxiv.org/abs/1406.1078.
+Zhou et al. [2022a]
+Gould et al. [2010]
+Tsantekidis et al. [2017]
+Hochreiter and Schmidhuber [1997]
+Goodfellow et al. [2016]
+Rumelhart et al. [1986]
+Gers et al. [1999]
+Graves [2013]
+Oomen and Gatheral [2010]
+Cho et al. [2014]
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 29/32
+
+================================================================================
+Page 30
+================================================================================
+
+Minh-Thang Luong, Hieu Pham, andChristopher D. Manning.Effective approaches to attention-based neuralmachine translation.CoRR, abs/1508.04025, 2015.URL http://arxiv.org/abs/1508.04025.
+R Farsani, Ehsan Pazouki, and Jecei Jecei.A transformer self-attention model for time seriesforecasting.Journal of Electrical and Computer EngineeringInnovations, 9:1–10, 01 2021.doi: 10.22061/JECEI.2020.7426.391.
+Ailing Zeng, Muxi Chen, Lei Zhang, and Qiang Xu.Are transformers effective for time seriesforecasting?, 2022a.URL https://arxiv.org/abs/2205.13504.
+Souhaib Ben Taieb and Rob J Hyndman.Recursive and direct multi-step forecasting: thebest of both worlds.Monash Econometrics and Business StatisticsWorking Papers 19/12, Monash University,Department of Econometrics and BusinessStatistics, 2012.URLhttps://ideas.repec.org/p/msh/ebswps/2012-19.html.
+Guillaume Chevillon.Direct multi-step estimation and forecasting.Journal of Economic Surveys, 21(4):746–785, 2007.doi: https://doi.org/10.1111/j.1467-6419.2007.00518.x.URLhttps://onlinelibrary.wiley.com/doi/abs/10.1111/j.16419.2007.00518.x.
+Robert B. Cleveland, William S. Cleveland, Jean E.McRae, and Irma Terpenning.Stl: A seasonal-trend decomposition procedurebased on loess.Journal of Official Statistics, 6:3–73, 1990.
+James Douglas Hamilton. Time Series Analysis.Princeton University Press, Princeton, 1994.ISBN 0691042896.
+Rob J. Hyndman.Forecasting : principles and practice.OTexts, Melbourne, third edition. edition, 2021 -2021.ISBN 9780987507136.
+Bryant Moscon. cryptofeed.https://github.com/bmoscon/cryptofeed,2022.
+Jan Novotny, Paul A Bilokon, Aris Galiotos, andFrédéric Délèze.Machine Learning and Big Data with kdb+/q.John Wiley & Sons, 2019.
+Luong et al. [2015]
+Farsani et al. [2021]
+Zeng et al. [2022a]
+Taieb and Hyndman [2012]
+Chevillon [2007]
+Cleveland et al. [1990]
+Hamilton [1994]
+Hyndman [2021 - 2021]
+Moscon [2022]
+Novotny et al. [2019]
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 30/32
+
+================================================================================
+Page 31
+================================================================================
+
+Haixu Wu, Jiehui Xu, Jianmin Wang, andMingsheng Long.Autoformer.https://github.com/thuml/Autoformer, 2022.
+Tian Zhou, Ziqing Ma, Qingsong Wen, Xue Wang,Liang Sun, and Rong Jin.Fedformer.https://github.com/MAZiqing/FEDformer,2022b.
+Adam Paszke, Sam Gross, Francisco Massa, AdamLerer, James Bradbury, Gregory Chanan, TrevorKilleen, Zeming Lin, Natalia Gimelshein, LucaAntiga, Alban Desmaison, Andreas Köpf,Edward Z. Yang, Zach DeVito, Martin Raison,Alykhan Tejani, Sasank Chilamkurthy, BenoitSteiner, Lu Fang, Junjie Bai, and Soumith Chintala.Pytorch: An imperative style, high-performancedeep learning library.CoRR, abs/1912.01703, 2019.URL http://arxiv.org/abs/1912.01703.
+Michael S. Lewis-Beck.Applied regression : an introduction.Sage university papers series. Quantitativeapplications in the social sciences ; no. 07-022.Sage Publications, Beverly Hills, Calif, 1980.ISBN 0803914946.
+Zihao Zhang.Deeplob-deep-convolutional-neural-networks-for-limit-order-books.https://github.com/zcakhaa/DeepLOB-Deep-Convolutional-Neural-Networks-for-Limit-Order-Books, 2021a.
+Zihao Zhang.Multi-horizon-forecasting-for-limit-order-books.https://github.com/zcakhaa/Multi-Horizon-Forecasting-for-Limit-Order-Books, 2021b.
+Ailing Zeng, Muxi Chen, Lei Zhang, and Qiang Xu.Ltsf-linear.https://github.com/cure-lab/LTSF-Linear,2022b.
+Fazl Barez, Paul Bilokon, Arthur Gervais, andNikita Lisitsyn.Exploring the advantages of transformers for high-frequency trading.SSRN Electronic Journal, 2023.doi: 10.2139/ssrn.4364833.
+Appendix ALabelling Details
+As mentioned in Section 3.4, a threshold 𝛿 needs to be set to decide the corresponding labels. The choice of 𝛿follows a simple rule, which is to make the labelling roughly balanced. The choice of 𝛿 for different predic-tion horizon on ETH-USDT dataset is shown in Table 8 and the distribution of labelling is shown in Figure 20.
+Horizon20 30 50 100
+Wu et al. [2022]
+Zhou et al. [2022b]
+Paszke et al. [2019]
+Lewis-Beck [1980]
+Zhang [2021a]
+Zhang [2021b]
+Zeng et al. [2022b]
+Barez et al. [2023]
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 31/32
+
+================================================================================
+Page 32
+================================================================================
+
+🌙
+𝛿 0.170.30.60.92
+Table 8:𝛿 for different prediction horizons for ETH-USDT dataset.(units in 10−4)
+Figure 20:Labelling distribution for different prediction horizon in ETH-USDT dataset
+◄ 
+  
+Feelinglucky?  
+Conversionreport (E)  
+Reportan issue  
+View originalon arXiv ►
+Copyright Privacy Policy Generated on Wed Feb 28 04:48:24 2024 by LT
+AEXML
+01-01-2026, 15:56 [2309.11400] Transformers versus LSTMs for electronic trading
+https://ar5iv.labs.arxiv.org/html/2309.11400#:~:text=With the rapid development of,applied in time series prediction 32/32

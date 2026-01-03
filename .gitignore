@@ -1,0 +1,200 @@
+# ============================================
+# Bot 2026 - .gitignore
+# ============================================
+
+# ============================================
+# Large Data Files
+# ============================================
+# Exclude all CSV datasets (they're too large for git)
+datasets/*.csv
+datasets/**/*.csv
+
+# Keep dataset folder structure, just ignore CSV files
+!datasets/.gitkeep
+
+# ============================================
+# Trained Models
+# ============================================
+# Prediction models (LSTM, GRU, BiLSTM, DLSTM)
+models/*.keras
+models/*.h5
+models/*.hdf5
+models/**/*.keras
+models/**/*.h5
+models/**/*.hdf5
+
+# PPO models and checkpoints
+PPO approach/ppo_models/*.zip
+PPO approach/ppo_models/**/*.zip
+PPO approach/checkpoints/**/*.zip
+PPO approach/checkpoints/**/*.pkl
+
+# Keep model folder structure
+!models/.gitkeep
+!PPO approach/ppo_models/.gitkeep
+!PPO approach/checkpoints/.gitkeep
+
+# ============================================
+# Scaler Files
+# ============================================
+scalers/*.pkl
+scalers/**/*.pkl
+
+# Keep scaler folder structure
+!scalers/.gitkeep
+
+# ============================================
+# Training Results & Logs
+# ============================================
+# Training plots and results
+results/*.png
+results/*.jpg
+results/*.json
+results/**/*.png
+results/**/*.jpg
+results/**/*.json
+
+# TensorBoard logs
+logs/
+runs/
+*.log
+training.log
+*.log.*
+
+# Keep results folder structure
+!results/.gitkeep
+
+# ============================================
+# Python Cache & Compiled Files
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ============================================
+# Virtual Environments
+# ============================================
+venv/
+env/
+ENV/
+.venv
+.ENV
+env.bak/
+venv.bak/
+
+# ============================================
+# Jupyter Notebook Checkpoints
+# ============================================
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# ============================================
+# IDE & Editor Files
+# ============================================
+# VS Code
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# ============================================
+# OS Files
+# ============================================
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ============================================
+# Temporary Files
+# ============================================
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# ============================================
+# Environment Variables & Secrets
+# ============================================
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets.json
+config.local.txt
+
+# ============================================
+# Large Output Files
+# ============================================
+# PDF files (if they're large)
+pdf/*.pdf
+
+# Keep PDF folder structure
+!pdf/.gitkeep
+
+# ============================================
+# RunPod Specific
+# ============================================
+# Training logs from RunPod
+training.log
+nohup.out
+*.out
+
+# ============================================
+# Keep Important Empty Folders
+# ============================================
+# Uncomment these if you want to keep folder structure:
+# !datasets/.gitkeep
+# !models/.gitkeep
+# !results/.gitkeep
+# !scalers/.gitkeep
+# !PPO approach/ppo_models/.gitkeep
+# !PPO approach/checkpoints/.gitkeep
+

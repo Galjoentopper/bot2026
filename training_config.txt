@@ -1,0 +1,90 @@
+[DATA]
+# Sequence length (lookback window) - research shows 60-100 works well
+# Imperial College paper used 100 for movement prediction
+# Options: 60 (faster, less context) or 100 (slower, more context)
+sequence_length = 60
+# Prediction horizon (steps ahead)
+prediction_horizon = 1
+# Base features from CSV
+features = open,high,low,close,volume
+# Target column for prediction
+target = close
+# Train/test split ratio (chronological)
+train_test_split = 0.8
+# Whether to add technical indicators (RSI, MACD, Bollinger Bands, etc.)
+use_technical_indicators = true
+
+[MODEL]
+# Hidden units per layer - MAXIMIZED for GPU utilization (target: 95%)
+# Larger networks use more GPU memory and compute
+# Options: 128 (standard), 256 (large), 512 (very large)
+# Increased to 256 for maximum GPU utilization
+units = 256
+# Number of recurrent layers - more layers = more GPU usage
+layers = 3
+# Dropout rate for regularization - slightly reduced to allow more learning
+dropout = 0.15
+# Learning rate - slightly higher for faster learning
+learning_rate = 0.0002
+# Optimizer
+optimizer = adam
+
+[TRAINING]
+# Batch size - MAXIMUM GPU utilization (target: 95% of 15GB = ~14GB)
+# With 15GB GPU, we can use very large batches for maximum throughput
+# Options: 256 (good), 512 (very good), 768 (excellent), 1024 (maximum)
+# Auto-adjustment will push to 1024+ for 95% GPU utilization
+batch_size = 512
+# Maximum epochs
+epochs = 150
+# Early stopping patience - increased to allow more training
+early_stopping_patience = 15
+# Validation split from training data
+validation_split = 0.1
+# Use class weights for imbalanced classification
+use_class_weights = true
+
+[CLASSIFICATION]
+# Smoothing window k - compare past k vs future k averages
+# Imperial College paper tested k=20, 30, 50, 100
+# k=20 achieved best accuracy (73.10%) in research
+# Options: 20 (most responsive), 30, 50, 100 (smoothest)
+# Increased to 30 for more stable labels
+smoothing_k = 30
+# Delta threshold: 'auto' calculates based on volatility
+# Or set manual value like 0.0002
+# Auto is usually best, but you can try manual values if needed
+threshold_delta = auto
+# Enable classification task
+enable_classification = true
+
+[DLSTM]
+# Moving average window for trend decomposition (AvgPool1D pool_size)
+# Smaller = more responsive, larger = smoother trends
+# Imperial College paper used AvgPool (not Conv1D) for trend extraction
+moving_average_window = 10
+# Trend branch units
+trend_units = 64
+# Remainder branch units
+remainder_units = 64
+
+[ENSEMBLE]
+# Enable ensemble training
+enable_ensemble = false
+# Models to include in ensemble
+models = lstm,gru,bilstm,dlstm
+# Voting method: soft or hard
+voting = soft
+
+[OUTPUT]
+# Directory for saved models
+models_dir = models
+# Directory for scalers
+scalers_dir = scalers
+# Directory for results (plots, metrics, etc.)
+results_dir = results
+# Save training history
+save_history = true
+# Generate training plots
+generate_plots = true
+

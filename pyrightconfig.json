@@ -1,0 +1,27 @@
+{
+  "include": [
+    "**/*.py",
+    "**/*.ipynb"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/venv",
+    "**/.venv"
+  ],
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "pythonVersion": "3.10",
+      "pythonPlatform": "All",
+      "extraPaths": [
+        "PPO approach"
+      ]
+    }
+  ],
+  "reportMissingImports": "warning",
+  "reportMissingTypeStubs": false,
+  "typeCheckingMode": "basic",
+  "stubPath": ".",
+  "pythonVersion": "3.10"
+}
+

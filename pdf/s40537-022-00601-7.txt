@@ -1,0 +1,675 @@
+
+================================================================================
+Page 1
+================================================================================
+
+Multivariate cryptocurrency prediction: 
+comparative analysis of three recurrent neural 
+networks approaches
+Seng Hansun1*  , Arya Wicaksana1 and Abdul Q. M. Khaliq2 
+Introduction
+As a relatively new type of currency introduced in the new millennium, cryptocurrency 
+is a digital or virtual currency that employs advanced encryption techniques in man -
+aging and regulating its currency units [1]. It heavily relies on blockchain technology. 
+Hence it inherits the blockchain’s properties, such as decentralization, transparency, 
+and immutability [2]. No single party or authority controls cryptocurrency transactions, 
+making it an exciting option for many people to use and invest in it.
+The first and most popular cryptocurrency to date is Bitcoin. It was established based 
+on the concept introduced in Satoshi Nakamoto’s publication in 2008 entitled ‘Bitcoin: 
+a Peer-to-Peer Electronic Cash System’ [3], which was later implemented as an open-
+source code and released for the public on SourceForge [4]. The concept was widely 
+accepted and adopted in various applications, helped shape the cryptocurrency ecosys -
+tems, and gave birth to many other cryptocurrencies, such as Ethereum, Ripple, Monero, 
+Stellar, Litecoin, and Dash [2]. Figure  1 shows Bitcoin’s and several other cryptocurren -
+cies’ prices in the last few years, together with their growth percentages.
+Abstract 
+As a new type of currency introduced in the new millennium, cryptocurrency has 
+established its ecosystems and attracts many people to use and invest in it. However, 
+cryptocurrencies are highly dynamic and volatile, making it challenging to predict 
+their future values. In this research, we use a multivariate prediction approach and 
+three different recurrent neural networks (RNNs), namely the long short-term memory 
+(LSTM), the bidirectional LSTM (Bi-LSTM), and the gated recurrent unit (GRU). We also 
+propose simple three layers deep networks architecture for the regression task in this 
+study. From the experimental results on five major cryptocurrencies, i.e., Bitcoin (BTC), 
+Ethereum (ETH), Cardano (ADA), Tether (USDT), and Binance Coin (BNB), we find that 
+both Bi-LSTM and GRU have similar performance results in terms of accuracy. However, 
+in terms of the execution time, both LSTM and GRU have similar results, where GRU is 
+slightly better and has lower variation results on average.
+Keywords: Bidirectional, Cryptocurrency, Gated recurrent unit, Long short-term 
+memory, Prediction, Recurrent neural networks
+Open Access
+© The Author(s) 2022. Open Access This article is licensed under a Creative Commons Attribution 4.0 International License, which permits 
+use, sharing, adaptation, distribution and reproduction in any medium or format, as long as you give appropriate credit to the original 
+author(s) and the source, provide a link to the Creative Commons licence, and indicate if changes were made. The images or other third 
+party material in this article are included in the article’s Creative Commons licence, unless indicated otherwise in a credit line to the mate-
+rial. If material is not included in the article’s Creative Commons licence and your intended use is not permitted by statutory regulation or 
+exceeds the permitted use, you will need to obtain permission directly from the copyright holder. To view a copy of this licence, visit http:// 
+creat iveco mmons. org/ licen ses/ by/4. 0/.
+RESEARCH
+Hansun et al. Journal of Big Data            (2022) 9:50  
+https://doi.org/10.1186/s40537-022-00601-7
+*Correspondence:   
+seng.hansun@lecturer.umn.
+ac.id 
+1 Informatics Department, 
+Universitas Multimedia 
+Nusantara, Tangerang, 
+Indonesia
+Full list of author information 
+is available at the end of the 
+article
+
+================================================================================
+Page 2
+================================================================================
+
+Page 2 of 15Hansun et al. Journal of Big Data            (2022) 9:50 
+As can be seen from Fig.  1a, cryptocurrencies prices are very dynamic, making it a 
+challenging task to predict the future values of cryptocurrencies. Moreover, cryptocur -
+rencies are also highly volatile, with sudden rises and dips over time, as shown in Fig.  1b, 
+caused by many factors. Therefore, the trading community needs an accurate prediction 
+method in helping them make strategic decisions and benefit from their investment [6].
+Several prediction techniques were introduced in previous studies, but they can be 
+mainly grouped into two approaches: traditional empirical analysis and machine learn -
+ing algorithms [7, 8]. In the traditional empirical analysis, various statistical methods 
+ranging from a simple one (such as moving average) to very complex analyses (such 
+as hidden Markov model and sentiment analysis techniques) had been applied to pre -
+dict the cryptocurrency prices movement [9]. Several studies that had a focus on this 
+approach are Anupriya and Garg [10], Abraham et al. [11], Mohapatra et al. [12], Nasir 
+et al. [13], Bakar and Rosbi [14], and Wolk [15].
+On the other hand, the machine learning approach was widely applied in various 
+fields, including for predicting cryptocurrency prices. Radityo et al. [16] tried to predict 
+the Bitcoin exchange rate to USD using artificial neural networks (ANNs). Four types 
+of ANNs were compared where they found that the backpropagation neural network 
+(BPNN) method is the best method that gives relatively low mean absolute percentage 
+error (MAPE) and shortest training time. Phaladisailoed and Numnonda [17] also had 
+tried to predict the Bitcoin price. However, they used other machine learning methods, 
+namely Theil-Sen regression and Huber regression, and even two deep learning meth -
+ods, namely long short-term memory (LSTM) and gated recurrent unit (GRU). Their 
+experimental results on 2195 daily trading exchange data (BTC/USD) found that GRU 
+got the lowest mean square error (MSE) and highest R-square values at 0.00002 and 
+0.992, respectively. Recently, Akyildirim et  al. [18] published their work in predicting 
+cryptocurrency returns using several machine learning methods, such as support vector 
+machine (SVM), logistic regression, artificial neural networks, and random forest. In this 
+study, their focus was not only on one cryptocurrency price but twelve cryptocurrencies’ 
+prices. They found that the SVM is the best performing method that gives consistent 
+results. Some other researchers also tried to develop ensemble methods in tackling the 
+cryptocurrency price prediction, as seen in the works of Sin and Wang [19] and Ji et al. 
+[20].
+Fig. 1 Cryptocurrencies’ price fluctuation (a) and growth percentages (b) in the last few years [5]
+
+================================================================================
+Page 3
+================================================================================
+
+Page 3 of 15
+Hansun et al. Journal of Big Data            (2022) 9:50 
+ 
+In this research, we will further apply and analyze three popular deep learning meth -
+ods that are classified as recurrent neural networks (RNNs). They are the long short-
+term memory (LSTM), the bi-directional LSTM, and the gated recurrent unit (GRU). 
+Although several studies had employed those methods, most of them focused on the 
+univariate prediction model, whilst in this research, we will put our focus on the mul -
+tivariate prediction model. Moreover, we also use five major cryptocurrencies accord -
+ing to the market capitalization, i.e., Bitcoin (BTC), Ethereum (ETH), Cardano (ADA), 
+Tether (USDT), and Binance Coin (BNB) [21]. Hence, several contributions of this 
+research are: (1) we propose simple three layers network architecture for regression task 
+in predicting cryptocurrencies’ prices, (2) we compare and analyze the proposed archi -
+tecture on three popular RNNs, namely LSTM, Bi-LSTM, and GRU models, (3) we use 
+the multivariate approach on five major cryptocurrencies and evaluate their results, and 
+lastly, (4) we run the proposed architecture on each model several times to get robust 
+evaluation results.
+The organization of this paper is structured as follows. The data collection and three 
+RNNs as deep learning methods used in this research will be explained shortly. Next, the 
+pre-processing steps, experimental results, and discussion will be given in the following 
+section. Finally, some concluding remarks and suggestions for future research direction 
+will end the paper.
+Data collection and research method
+We start this section by explaining the data collection source and their characteristics. 
+Next, a brief description of three popular RNNs models, namely LSTM, Bi-LSTM, and 
+GRU, will be given. In the end, an explanation of three commonly used prediction error 
+criteria, i.e., mean absolute error (MAE), mean absolute percentage error (MAPE), and 
+root mean square error (RMSE), as the performance evaluation metrics used in this 
+research will be delivered.
+Data source and characteristics
+We focus our study on five major cryptocurrencies based on their market capitalization 
+[21]. They are Bitcoin (BTC), Ethereum (ETH), Cardano (ADA), Tether (USDT), and 
+Binance Coin (BNB). We collected the daily recorded data of each cryptocurrency price 
+against USD from Yahoo! Finance [22] and took the maximum available data from the 
+source. Each collected dataset contains seven attributes with different data types, namely 
+Date (date), Open (float), High (float), Low (float), Close (float), Adj Close (float), and 
+Volume (int). Since each cryptocurrency was introduced and recorded in different time, 
+the start date of available data for each cryptocurrency will be differed each other. This 
+also results in different number of total records being studied for each cryptocurrency. 
+The characteristics of collected datasets are shown in Table 1.
+Long short‑term memory (LSTM), bidirectional LSTM (Bi‑LSTM), and gated 
+recurrent unit (GRU)
+As an improved version of feedforward neural networks, the recurrent neural networks 
+(RNNs) can keep past information by taking previous layers’ output as input for the next 
+layer in the networks [23]. However, it cannot learn a too-long memory contained in the 
+
+================================================================================
+Page 4
+================================================================================
+
+Page 4 of 15Hansun et al. Journal of Big Data            (2022) 9:50 
+networks and suffers the long-term dependency problem [24]. Therefore, a special type of 
+RNNs was introduced by Hochreiter and Schmidhuber that could solve the problem [25]. 
+Later, the proposed method was called the long short-term memory (LSTM) model and 
+was widely used in various applications, including solving regression tasks, such as time 
+series prediction.
+To store the state in the networks, LSTM uses a three gates mechanism. The first gate 
+is the forget gate ( ft ) that controls the degree of information loss from the previous cell’s 
+hidden state. The second gate is the input gate ( it ) that controls the degree of new informa-
+tion that will be stored in the current cell state. Lastly, the third gate is the output gate ( ot ), 
+which calculates the new output value for the current cell [26]. Figure 2 illustrates the three 
+gates mechanism in an LSTM cell, while several related equations used in an LSTM cell are 
+shown as Eqs. (1–6).
+(1)ft = σ
+(
+W fht−1 + U fxt + bf
+)
+(2)it = σ (W iht−1 + U ixt + bi)
+Table 1 Data characteristics
+a Missing data on 2020-04-17, 2020-10-09, 2020-10-12, 2020-10-13
+b Missing data on 2015-02-27, 2015-02-28, 2015-03-01, 2015-03-04, 2015-03-05, 2020-04-17, 2020-10-09, 2020-10-12, 2020-
+10-13
+Cryptocurrency Pairs Start date End date No. of records No. of 
+missing 
+data
+Bitcoin BTC-USD 2014-09-17 2021-10-12 2583 4a
+Ethereum ETH-USD 2015-08-07 2021-10-12 2259 4a
+Cardano ADA-USD 2017-10-01 2021-10-12 1473 4a
+Tether USDT-USD 2015-02-25 2021-10-12 2422 9b
+Binance coin BNB-USD 2017-07-25 2021-10-12 1541 4a
+Fig. 2 LSTM cell and its gates mechanism [28]
+
+================================================================================
+Page 5
+================================================================================
+
+Page 5 of 15
+Hansun et al. Journal of Big Data            (2022) 9:50 
+ 
+Here, ˜C t is the candidate cell state and C t is the current cell state. All networks’ weights 
+are denoted as W f, W i, W C , W o, U f, U i, U C , U o and bias variables as bf, bi, bC , bo . ht rep-
+resents current hidden state value and xt represents new information at the current cell. 
+Two types of activation functions are used here, i.e., the sigmoid ( σ ) and the tangent 
+hyperbolic ( tanh ) activation functions. They are the most frequently used nonlinear acti-
+vation functions in artificial neural networks [27].
+A newer version of LSTM, called the bidirectional LSTM (Bi-LSTM) model, was intro-
+duced later. In Bi-LSTM, the bidirectional structure of RNNs is employed. Therefore, rather 
+than one forward direction hidden layer, two hidden layers with similar output and inverse 
+directions are used [29], as shown in Fig.  3. When the networks have learned from both 
+directions separately, their output will be combined by using any merge modes available for 
+Bi-LSTM [30]. In this study, we used the default merge mode in Bi-LSTM, i.e., the concat-
+enation mode. By using this approach, both past and future information contained in the 
+dataset can be preserved [31].
+Another type of RNNs recently introduced by Cho et al. [33] is known as the gated recur-
+rent unit (GRU). It is pretty similar to LSTM; however, it uses fewer gates and simpler equa-
+tions. It combines LSTM’s forget and input gates into a single update gate and merges the 
+cell and hidden states [6 ]. Four equations are incorporated in the GRU cell as shown in 
+Eqs. (7–10) below.
+(3)˜Ct = tanh(W C ht−1 + UC xt+ bC )
+(4)C t = ft ⊙ C t−1 + it ⊙ ˜C t
+(5)ot = σ (W oht−1 + U oxt + bo)
+(6)ht = ot ⊙ tanh(C t)
+(7)zt = σ (W z · [ht−1 ,xt])
+(8)rt = σ (W r · [ht−1 ,xt])
+Fig. 3 LSTM versus Bi-LSTM architectures [32]
+
+================================================================================
+Page 6
+================================================================================
+
+Page 6 of 15Hansun et al. Journal of Big Data            (2022) 9:50 
+Here, zt and rt are the update and reset gates, W z and W r are the networks’ weights, ˜ht is 
+the current memory state, ht is the final memory or output of the GRU unit to be passed 
+on to the next unit, and xt is the new information at the current cell. Figure  4 shows a 
+GRU cell and its gates.
+Performance evaluation
+To evaluate the prediction results, we use three popular error criteria, i.e., mean abso -
+lute error (MAE), mean absolute percentage error (MAPE), and root mean square error 
+(RMSE). In MAE and RMSE, the degrees of error are given in a unit value, whilst in MAPE, 
+the degree of error is given in a percentage value. Equations (11–13) represent those three 
+error measurements where a smaller score implies better prediction results [35, 36].
+Here, the total number of data is denoted as n , the actual observed value is denoted as Y t , 
+and the predicted value is denoted as Ft.
+(9)˜ht = tanh (W · [rt ⊙ ht−1 ,xt])
+(10)ht = (1 − zt) ⊙ ht−1 + zt ⊙ ˜ht
+(11)MAE = 1
+n
+n∑
+t=1
+|Yt − Ft|
+(12)RMSE =
+√1
+n
+n∑
+t=1
+(Yt − Ft)2
+(13)MAPE =
+(
+1
+n
+n∑
+t=1
+⏐⏐⏐⏐
+Yt − Ft
+Yt
+⏐⏐⏐⏐
+)
+× 100%
+Fig. 4 GRU cell and its gates mechanism [34]
+
+================================================================================
+Page 7
+================================================================================
+
+Page 7 of 15
+Hansun et al. Journal of Big Data            (2022) 9:50 
+ 
+Results and discussion
+In this section, we will explain the pre-processing and model development phase 
+taken in the study. Next, several examples of the prediction plot results of each cryp -
+tocurrency are shown, followed by the performance results and analysis of this study.
+Pre‑processing and model development
+We conducted several pre-processing steps for each cryptocurrency data, starting 
+from data imputation to handle missing values to data reshaped so that it can be pro -
+cessed by the deep learning methods applied in this study, namely LSTM, Bi-LSTM, 
+and GRU. Firstly, out of seven data attributes, we dropped the Adjusted Close attrib -
+ute and focused on predicting the Close value as the target feature. Hence, rather than 
+a univariate prediction approach, we used a multivariate prediction model in this 
+study by incorporating the Close, Open, High, Low, and Volume data attributes. Next, 
+we checked for missing values found in the dataset and used a simple data imputation 
+technique by replacing the missing values with their previous known records. Then, 
+we normalized all data features using a MinMaxScaler transformation and reframed 
+the dataset as a multivariate model. The next step is to split the data into training and 
+test sets. We used an 80:20 ratio for training: test for each cryptocurrency. Lastly, we 
+reshaped both those sets into 3D-array shapes to be further used in the deep learning 
+model development phase.
+In this study, we propose simple three layers networks architecture to be used in 
+each deep learning model. We argue that simple networks architecture could achieve 
+comparable performance results with deeper and complex ones, especially for regres -
+sion tasks in the time series domain. Our proposed three layers architecture consists 
+of one considered deep learning layer (LSTM, Bi-LSTM, or GRU) with 100 neurons, 
+one Dropout layer that will drop 10% of processed information, and one Dense layer 
+with one neuron as the output. During the networks’ compilation, we used mean 
+square error as the loss function and Adam optimizer. The deep learning model will 
+be trained for 50 epochs with 32 batch sizes each run.
+The model was trained and run on Google Colab with a single core (two threads) 
+ Intel®  Xeon® Processors @ 2.20 GHz,  ~ 12.69 GB RAM, and  ~ 107.72 GB disk spaces. 
+In conducting the experiments, we used Python 3 and several core libraries, such as 
+NumPy for numerical computing, Pandas for data processing and analysis, Matplotlib 
+for data visualization, Keras and scikit-learn (sklearn) for the deep learning applica -
+tion programming interface (API) in Python.
+Prediction results
+After we trained each cryptocurrency dataset on the proposed deep networks archi -
+tecture, we tested it on the test set for evaluation. The model development and evalu -
+ation were run ten times for each deep learning network (LSTM, Bi-LSTM, and GRU) 
+to get robust evaluation performance results. The prediction results were plotted as 
+shown in Figs.  5, 6, 7 for each deep learning model (only the first run was shown). The 
+blue line shows the actual value, while the red line shows the predicted value. As can 
+be seen from the plotted results, each approach (LSTM in Fig.  5, Bi-LSTM in Fig.  6, 
+
+================================================================================
+Page 8
+================================================================================
+
+Page 8 of 15Hansun et al. Journal of Big Data            (2022) 9:50 
+Fig. 5 Prediction results for five cryptocurrencies using LSTM
+Fig.6 Prediction results for five cryptocurrencies using Bi-LSTM
+
+================================================================================
+Page 9
+================================================================================
+
+Page 9 of 15
+Hansun et al. Journal of Big Data            (2022) 9:50 
+ 
+and GRU in Fig.  7) gives similar results and could follow each cryptocurrency pattern. 
+Further discussion and analysis of the prediction results are given in the following 
+sub-section.
+Analysis
+We used three popular error measurement criteria in conducting the evaluation, i.e., 
+MAE, RMSE, and MAPE. Ten consecutive runs were conducted for each deep learning 
+method and each cryptocurrency pair, and the mean error values were recorded. Table 2 
+shows the error measurement results of each cryptocurrency pair. The lowest score of 
+each pair is shown in bold text.
+The performance evaluation using MAE and RMSE gave similar results. For USDT-
+USD and BNB-USD, the deep networks architecture trained using LSTM gave the best 
+results on average at 0.0025/0.0034 (MAE/RMSE) for USDT-USD and 18.0877/27.6245 
+for BNB-USD. Bi-LSTM, on the other hand, gave the best result on average at 
+100.1383/147.8453 for ETH/USD. Meanwhile, for both BTC-USD and ADA-USD, the 
+GRU method achieved the best results at 1167.3462/1777.3070 and 0.0782/0.1134, 
+respectively.
+We got a slightly different result when the performance evaluation was measured 
+by MAPE. For the ETH-USD cryptocurrency pair, which was previously got the best 
+results when trained using Bi-LSTM, now when measured using MAPE, the best result 
+was achieved by GRU. In fact, GRU is the preferred deep learning method among those 
+Fig. 7 Prediction results for five cryptocurrencies using GRU 
+
+================================================================================
+Page 10
+================================================================================
+
+Page 10 of 15Hansun et al. Journal of Big Data            (2022) 9:50 
+three RNNs, which gave the lowest MAPE score at 0.0447 on average between those five 
+considered cryptocurrencies. Bi-LSTM is slightly worse than GRU in the performance 
+evaluation using MAPE, while LSTM is the worst. The boxplot diagram that shows the 
+MAPE comparison is illustrated in Fig. 8.
+To further determine whether the performance results between each applied 
+deep learning method are significantly different or not, we conducted a paired 
+sample t-test. A Microsoft Excel add-in named ‘data analysis toolpak’ [37] was 
+used. Using the tool, we compared the MAE, RMSE, and MAPE results between 
+Table 2 Performance results of each cryptocurrency (average of ten consecutive running)
+Bold value represents the lowest error score for each cryptocurrency pair
+Cryptocurrency LSTM Bi-LSTM GRU 
+MAE
+ BTC-USD 1617.759257 1422.193352 1167.346179
+ ETH-USD 103.188847 100.138256 101.630728
+ ADA-USD 0.137898 0.098166 0.078228
+ USDT-USD 0.002499 0.002976 0.004163
+ BNB-USD 18.087664 19.239469 22.458479
+RMSE
+ BTC-USD 2518.021766 2222.735463 1777.306958
+ ETH-USD 150.091734 147.845256 151.619954
+ ADA-USD 0.191532 0.138818 0.113399
+ USDT-USD 0.003415 0.003857 0.005565
+ BNB-USD 27.624510 28.797400 31.890770
+MAPE
+ BTC-USD 0.042186 0.038008 0.034927
+ ETH-USD 0.063559 0.059719 0.057318
+ ADA-USD 0.099672 0.072456 0.057024
+ USDT-USD 0.002496 0.002973 0.004158
+ BNB-USD 0.057045 0.059700 0.069829
+Average 0.0529916 0.0465712 0.0446512
+Fig. 8 MAPE comparison of each RNNs deep learning method
+
+================================================================================
+Page 11
+================================================================================
+
+Page 11 of 15
+Hansun et al. Journal of Big Data            (2022) 9:50 
+ 
+LSTM—Bi-LSTM, LSTM—GRU, and Bi-LSTM—GRU. The paired sample t -test 
+results are shown in Table  3. It can be seen that the two-tailed p -values for all com -
+parisons are more than the significance level at 0.05. Therefore, although GRU is the 
+preferred method based on the error measurement criteria results, the difference in 
+performance results between each deep learning method is not significantly differ -
+ent from each other.
+We also recorded the execution time for model development of each considered 
+method in this study during the experiment. Table  4 shows the recorded aver -
+age execution time for ten runs of each model on each cryptocurrency. As can be 
+inferred from the results, the LSTM method needs a shorter execution time for 
+model development than the Bi-LSTM method. However, GRU is the better method 
+among those three RNNs that gives the shortest execution time at 7.5791 on average, 
+which was slightly better than LSTM at 7.9768 on average. It seems that both LSTM 
+and GRU have similar performance in terms of execution time, while Bi-LSTM is the 
+worst. Figure  9 depicts the execution time comparison for each RNNs deep learning 
+method in a Boxplot diagram.
+Lastly, we compare the performance results of the proposed approach with other 
+similar studies in predicting future cryptocurrencies values. Table  5 shows the rela -
+tive comparison of similar studies based on the best average MAPE results. Our pro -
+posed approach seems to compete with other more complex methods pretty nicely.
+Table 3 t-test results
+Comparison Pearson 
+correlation
+t-stat df t critical (2-tailed) Sig. (2-tailed)
+LSTM vs. Bi-LSTM
+ MAE 0.99998 1.01226 4 2.77645 0.36867
+ RMSE 0.99998 1.00473 4 2.77645 0.37188
+ MAPE 0.95813 1.19837 4 2.77645 0.29692
+LSTM vs. GRU 
+ MAE 0.99975 0.99231 4 2.77645 0.37722
+ RMSE 0.99970 0.99035 4 2.77645 0.37806
+ MAPE 0.81138 0.89706 4 2.77645 0.42040
+Bi-LSTM vs. GRU 
+ MAE 0.99987 0.97702 4 2.77645 0.38388
+ RMSE 0.99984 0.98083 4 2.77645 0.38221
+ MAPE 0.94161 0.46637 4 2.77645 0.66521
+Table 4 Execution time comparison
+Cryptocurrency LSTM Bi-LSTM GRU 
+BTC-USD 5.833213 9.576691 8.610098
+ETH-USD 9.880395 11.461678 6.416154
+ADA-USD 5.256119 10.544531 8.573460
+USDT-USD 7.510552 10.561677 7.141822
+BNB-USD 11.403947 12.215563 7.154183
+Average 7.9768452 10.872028 7.5791434
+
+================================================================================
+Page 12
+================================================================================
+
+Page 12 of 15Hansun et al. Journal of Big Data            (2022) 9:50 
+Fig. 9 Execution time comparison of each RNNs deep learning method
+Table 5 Relative comparison with similar studies
+a The proposed method in those studies
+Authors (year) Data source Cryptocurrencies Methods Avg. MAPE (best)
+Radityo et al. [16] cryptocompare.com Bitcoin (BTC) BPNN
+GANN
+GABPNN
+NEAT
+1.998
+4.461
+1.883
+2.175
+Patel et al. [2] investing.com Litecoin (LTC)
+Monero (XMR)
+LSTM (LTC)
+LSTM (XMR)
+GRU-LSTM (LTC)a
+GRU-LSTM (XMR)a
+6.3109
+5.4405
+2.0581
+6.2754
+Jay et al. [24] coinmarketcap.com Bitcoin (BTC)
+Ethereum (ETH)
+Litecoin (LTC)
+Stoc. MLP (BTC)
+Stoc. MLP (ETH)
+Stoc. MLP (LTC)
+Stoc. LSTM (BTC)
+Stoc. LSTM (ETH)
+Stoc. LSTM (LTC)
+2.96007
+2.55175
+2.47681
+3.19191
+3.46424
+2.69210
+Karova et al. [38] CoinAPI Bitcoin (BTC) LSTM 3.353
+Buyrukoglu [39] coinmarketcap.com Audius (AUDI)
+Bitcoin Gold (BTG)
+OKB
+Pax Dollar (USDP)
+Telcoin (TEL)
+LSTM (AUDI)
+LSTM (BTG)
+LSTM (OKB)
+LSTM (USDP)
+LSTM (TEL)
+Ens. LSTM (AUDI)a
+Ens. LSTM (BTG)a
+Ens. LSTM (OKB)a
+Ens. LSTM (USDP)a
+Ens. LSTM (TEL)a
+0.43
+0.78
+0.44
+0.09
+0.83
+0.27
+0.75
+0.69
+0.12
+0.52
+Our approach finance.yahoo.com Bitcoin (BTC)
+Ethereum (ETH)
+Cardano (ADA)
+Tether (USDT)
+Binance Coin (BNB)
+LSTM
+Bi-LSTM
+GRU 
+0.052991
+0.0465712
+0.0446512
+
+================================================================================
+Page 13
+================================================================================
+
+Page 13 of 15
+Hansun et al. Journal of Big Data            (2022) 9:50 
+ 
+Conclusion
+We have proposed simple three layers deep networks architecture to be used and com -
+pared among three popular RNNs, namely the long short-term memory (LSTM), the 
+bidirectional LSTM (Bi-LSTM), and the gated recurrent unit (GRU). We used a mul -
+tivariate prediction model approach on five major cryptocurrencies against USD while 
+performing a robust evaluation by running the proposed networks architecture ten 
+times. We found that both Bi-LSTM and GRU have similar performance results in aver -
+aged MAPE from the experimental results. LSTM could get better results for USDT-
+USD and BNB-USD, but it also has greater variation than Bi-LSTM and GRU. Moreover, 
+LSTM and GRU have similar results in terms of execution time, where GRU is slightly 
+better and has lower variation results on average.
+To get better prediction results, specific experiments on the deep networks architec -
+ture for each cryptocurrency pair could be conducted. Moreover, in this study, we used 
+the default merge mode (concatenation) for Bi-LSTM. Another study to compare the 
+effect of various merge modes for Bi-LSTM in predicting cryptocurrency can be done. 
+Similarly, the effect of different activation functions used in the model development 
+could also be taken for future research.
+Abbreviations
+ADA: Cardano; ANNs: Artificial neural networks; AUDI: Audius; Bi-LSTM: Bidirectional long short-term memory; BNB: 
+Binance coin; BPNN: Backpropagation neural network; BTC: Bitcoin; BTG: Bitcoin gold; ETH: Ethereum; GANN: Genetic 
+algorithm neural network; GABPNN: Genetic algorithm backpropagation neural network; GRU : Gated recurrent unit; 
+LSTM: Long short-term memory; LTC: Litecoin; MAE: Mean absolute error; MAPE: Mean absolute percentage error; MSE: 
+Mean square error; NEAT: Neuroevolution of augmenting topologies; RMSE: Root mean square error; RNN: Recurrent 
+neural networks; TEL: Telcoin; USDP: Pax dollar; USDT: Tether; XMR: Monero.
+Acknowledgements
+We would like to acknowledge the support and facilities given by Universitas Multimedia Nusantara during this study.
+Author contributions
+SH has initiated the study, conducted the experiments, and made the first draft of this paper. AW and AQMK gave 
+experts’ opinions and contributed to the experimental phase. All authors have read and approved the final manuscript.
+Funding
+Not applicable.
+Availability of data and materials
+The datasets used and/or analyzed during the current study are available from the corresponding author on reasonable 
+request.
+Declarations
+Ethics approval and consent to participate
+Not applicable.
+Consent for publication
+Not applicable.
+Competing interests
+The authors declare that they have no competing interests.
+Author details
+1 Informatics Department, Universitas Multimedia Nusantara, Tangerang, Indonesia. 2 Department of Mathematical Sci-
+ences and Center for Computational Science, Middle Tennessee State University, Murfreesboro, USA. 
+Received: 14 November 2021   Accepted: 6 April 2022
+
+
+================================================================================
+Page 14
+================================================================================
+
+Page 14 of 15Hansun et al. Journal of Big Data            (2022) 9:50 
+References
+ 1. Sharma MPA, Bhardwaj VVV, Sharma AP , Iqbal R, et al. Prediction of the price of Ethereum blockchain cryptocurrency 
+in an industrial finance system. Comput Electr Eng. 2020;81:106527.
+ 2. Patel MM, Tanwar S, Gupta R, Kumar N. a deep learning-based cryptocurrency price prediction scheme for financial 
+institutions. J Inf Secur Appl. 2020;55:102583.
+ 3. Nakamoto S. Bitcoin: a peer-to-peer electronic cash system. 2008. https:// bitco in. org/ bitco in. pdf. Accessed 01 Nov 
+2021.
+ 4. Li TR, Chamrajnagar AS, Fong XR, Rizik NR, Fu F. Sentiment-based prediction of alternative cryptocurrency price 
+fluctuations using gradient boosting tree model. Front Phys. 2019;7:1–8. https:// doi. org/ 10. 3389/ fphy. 2019. 00098/ 
+full.
+ 5. Fusion Media Limited. Live cryptocurrency chart. Investing.com. 2021. https:// www. inves ting. com/ charts/ crypt ocurr 
+ency- charts. Accessed 12 Oct 2021.
+ 6. Dutta A, Kumar S, Basu M. A gated recurrent unit approach to Bitcoin price prediction. J Risk Financ Manag. 
+2020;13(23):1–16.
+ 7. Chen Z, Li C, Sun W. Bitcoin price prediction using machine learning: an approach to sample dimension engineer-
+ing. J Comput Appl Math. 2020;365:112395.
+ 8. Alonso-Monsalve S, Suárez-Cetrulo AL, Cervantes A, Quintana D. Convolution on neural networks for high-
+frequency trend prediction of cryptocurrency exchange rates using technical indicators. Expert Syst Appl. 
+2020;149:113250.
+ 9. Khedr AM, Arif I, Pravija Raj PV, El-Bannany M, Alhashmi SM, Sreedharan M. Cryptocurrency price prediction using 
+traditional statistical and machine-learning techniques: a survey. Intell Syst Account Financ Manag. 2021;28(1):3–34. 
+https:// doi. org/ 10. 1002/ isaf. 1488.
+ 10. Garg SA. Autoregressive integrated moving average model based prediction of Bitcoin close price. In: 2018 interna-
+tional conference on smart systems and inventive technology (ICSSIT). Tirunelveli: IEEE; 2018. p. 473–8.
+ 11. Abraham J, Higdon D, Nelson J, Ibarra J. Cryptocurrency price prediction using Tweet volumes and sentiment analy-
+sis. SMU Data Sci Rev. 2018;1(3):1–22.
+ 12. Mohapatra S, Ahmed N, Alencar P . KryptoOracle: a real-time cryptocurrency price prediction platform using Twitter 
+sentiments. In: 2019 IEEE international conference on big data (Big Data). Los Angeles: IEEE; 2019. p. 5544–51.
+ 13. Nasir MA, Huynh TLD, Nguyen SP , Duong D. Forecasting cryptocurrency returns and volume using search engines. 
+Financ Innov. 2019;5(2):1–13. https:// doi. org/ 10. 1186/ s40854- 018- 0119-8.
+ 14. Bakar NA, Rosbi S. High volatility detection method using statistical process control for cryptocurrency exchange 
+rate: a case study of Bitcoin. Int J Eng Sci. 2017;6(11):39–48.
+ 15. Wołk K. Advanced social media sentiment analysis for short-term cryptocurrency price prediction. Expert Syst. 
+2020;37(2):1–16. https:// doi. org/ 10. 1111/ exsy. 12493.
+ 16. Radityo A, Munajat Q, Budi I. Prediction of Bitcoin exchange rate to American dollar using artificial neural network 
+methods. In: 2017 international conference on advanced computer science and information systems (ICACSIS). Bali: 
+IEEE; 2017. p. 433–8.
+ 17. Phaladisailoed T, Numnonda T. Machine learning models comparison for Bitcoin price prediction. In: 2018 10th 
+international conference on information technology and electrical engineering (ICITEE). Bali: IEEE; 2018. p. 506–11.
+ 18. Akyildirim E, Goncu A, Sensoy A. Prediction of cryptocurrency returns using machine learning. Ann Oper Res. 
+2021;297(1–2):3–36. https:// doi. org/ 10. 1007/ s10479- 020- 03575-y.
+ 19. Sin E, Wang L. Bitcoin price prediction using ensembles of neural networks. In: 2017 13th international conference 
+on natural computation, fuzzy systems and knowledge discovery (ICNC-FSKD). Guilin: IEEE; 2017. p. 666–71.
+ 20. Ji S, Kim J, Im H. A comparative study of Bitcoin price prediction using deep learning. Mathematics. 2019;7(10):898.
+ 21. CoinMarketCap. Today’s cryptocurrency prices by market cap. 2021. https:// coinm arket cap. com/. Accessed 12 Oct 
+2021.
+ 22. Finance Y. Cryptocurrencies. 2021. https:// finan ce. yahoo. com/ crypt ocurr encies? gucco unter= 1& guce_ refer rer= 
+aHR0c HM6Ly 93d3c uZ29v Z2xlL mNvbS 8& guce_ refer rer_ sig= AQAAA LGMA8 7KZqz Mmcs1 FGo1N rTYyq R3QcX N9F_ 
+DTDVL injVl cOWtiZ_ dyUz6 10QpI K8Ba4 E9JvP 5NCp7 GoT6y 6gOHF- RDSZd Pd__ KxoLd nih1a_ 7JfeU mtKL2 DTQa4 
+TOGpQ gyb. Accessed 12 Oct 2021.
+ 23. Long J, Khaliq AQM, Furati KM. Identification and prediction of time-varying parameters of COVID-19 model: a data-
+driven deep learning approach. Int J Comput Math. 2021. https:// doi. org/ 10. 1080/ 00207 160. 2021. 19299 42.
+ 24. Jay P , Kalariya V, Parmar P , Tanwar S, Kumar N, Alazab M. Stochastic neural networks for cryptocurrency price predic-
+tion. IEEE Access. 2020;8:82804–18.
+ 25. Yu L, Liang S, Chen R, Lai KK. Predicting monthly biofuel production using a hybrid ensemble forecasting methodol-
+ogy. Int J Forecast. 2019. https:// doi. org/ 10. 1016/j. ijfor ecast. 2019. 08. 014.
+ 26. Hansun S, Young JC. Predicting LQ45 financial sector indices using RNN-LSTM. J Big Data. 2021;8(1):104. https:// doi. 
+org/ 10. 1186/ s40537- 021- 00495-x.
+ 27. Li S, Zhao X. Image-based concrete crack detection using convolutional neural network and exhaustive search 
+technique. Adv Civ Eng. 2019;2019:1–12.
+ 28. Hansun S, Suryadibrata A. Gold price prediction in COVID-19 era. Int J Comput Intell Control. 2021;13(2):1.
+ 29. Shahid F, Zameer A, Muneeb M. Predictions for COVID-19 with deep learning models of LSTM, GRU and Bi-LSTM. 
+Chaos Solitons Fractals. 2020;140:110212.
+ 30. Le T, Vo MT, Vo B, Hwang E, Rho S, Baik SW. Improving electric energy consumption prediction using CNN and Bi-
+LSTM. Appl Sci. 2019;9(20):4237.
+ 31. Zeroual A, Harrou F, Dairi A, Sun Y. Deep learning methods for forecasting covid-19 time-series data: a comparative 
+study. Chaos Solitons Fractals. 2020;140:110121.
+ 32. Shen S-L, Atangana Njock PG, Zhou A, Lyu H-M. Dynamic prediction of jet grouted column diameter in soft soil 
+using Bi-LSTM deep learning. Acta Geotech. 2021;16(1):303–15. https:// doi. org/ 10. 1007/ s11440- 020- 01005-8.
+
+================================================================================
+Page 15
+================================================================================
+
+Page 15 of 15
+Hansun et al. Journal of Big Data            (2022) 9:50 
+ 
+ 33. Cho K, van Merrienboer B, Gulcehre C, Bahdanau D, Bougares F, Schwenk H, et al. Learning phrase representations 
+using RNN encoder–decoder for statistical machine translation. In: Conference on empirical methods in natural 
+language processing. Doha: EMNLP 2014; 2014. p. 1–15.
+ 34. Phi M. Illustrated Guide to LSTM’s and GRU’s: a step by step explanation. Towards data science. 2018. https:// towar 
+dsdat ascie nce. com/ illus trated- guide- to- lstms- and- gru-s- a- step- by- step- expla nation- 44e9e b85bf 21. Accessed 1 Apr 
+2021.
+ 35. Hansun S, Charles V, Gherman T, Subanar S, Indrati CR. A tuned holt-winters white-box model for COVID-19 predic-
+tion. Int J Manag Decis Mak. 2021;20(1):1.
+ 36. Omran NF, Abd-el Ghany SF, Saleh H, Ali AA, Gumaei A, Al-Rakhami M, Khalil AM. Applying deep learning methods 
+on time-series data for forecasting COVID-19 in Egypt, Kuwait, and Saudi Arabia. Complexity. 2021;2021:1–13.
+ 37. Hansun S, Charles V, Gherman T, Varadarajan V. Hull-WEMA: a novel zero-lag approach in the moving average family, 
+with an application to COVID-19. Int J Manag Decis Mak. 2022;21(1):92–112.
+ 38. Karova M, Penev I, Marinov D. Design and implementation of cryptocurrency price prediction system. In: Advances 
+in intelligent systems and computing. Cham: Springer; 2020. p. 628–43. https:// doi. org/ 10. 1007/ 978-3- 030- 52243-8_ 
+47.
+ 39. Buyrukoglu S. Promising cryptocurrency analysis using deep learning. In: 2021 5th International symposium on 
+multidisciplinary studies and innovative technologies (ISMSIT). Ankara: IEEE; 2021. p. 372–6.
+Publisher’s Note
+Springer Nature remains neutral with regard to jurisdictional claims in published maps and institutional affiliations.

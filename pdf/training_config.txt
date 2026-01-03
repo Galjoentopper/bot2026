@@ -1,0 +1,81 @@
+[DATA]
+# Sequence length (lookback window) - research shows 60-100 works well
+# Imperial College paper used 100 for movement prediction
+# Options: 60 (faster, less context) or 100 (slower, more context)
+sequence_length = 60
+# Prediction horizon (steps ahead)
+prediction_horizon = 1
+# Base features from CSV
+features = open,high,low,close,volume
+# Target column for prediction
+target = close
+# Train/test split ratio (chronological)
+train_test_split = 0.8
+# Whether to add technical indicators (RSI, MACD, Bollinger Bands, etc.)
+use_technical_indicators = true
+
+[MODEL]
+# Hidden units per layer - research suggests 64-128 is optimal
+units = 100
+# Number of recurrent layers
+layers = 2
+# Dropout rate for regularization
+dropout = 0.2
+# Learning rate - 0.0001 is stable for crypto
+learning_rate = 0.0001
+# Optimizer
+optimizer = adam
+
+[TRAINING]
+# Batch size - 32 is commonly effective for regression
+# Imperial College paper used 64 for classification tasks
+# Options: 32 (faster, less stable) or 64 (slower, more stable for classification)
+batch_size = 32
+# Maximum epochs
+epochs = 100
+# Early stopping patience
+early_stopping_patience = 15
+# Validation split from training data
+validation_split = 0.1
+# Use class weights for imbalanced classification
+use_class_weights = true
+
+[CLASSIFICATION]
+# Smoothing window k - compare past k vs future k averages
+# Imperial College paper tested k=20, 30, 50, 100
+# k=20 achieved best accuracy (73.10%) in research
+# Options: 20 (most responsive), 30, 50, 100 (smoothest)
+smoothing_k = 20
+# Delta threshold: 'auto' calculates based on volatility
+# Or set manual value like 0.0002
+threshold_delta = auto
+# Enable classification task
+enable_classification = true
+
+[DLSTM]
+# Moving average window for trend decomposition (AvgPool1D pool_size)
+# Smaller = more responsive, larger = smoother trends
+# Imperial College paper used AvgPool (not Conv1D) for trend extraction
+moving_average_window = 10
+# Note: Both trend and remainder branches now use full units (100)
+# as per Imperial College paper architecture
+
+[ENSEMBLE]
+# Enable ensemble prediction (combines all models)
+enable_ensemble = false
+# Models to include in ensemble
+models = lstm,gru,bilstm,dlstm
+# Voting method: 'soft' (average probabilities) or 'hard' (majority vote)
+voting = soft
+
+[OUTPUT]
+# Directory for saved models
+models_dir = models
+# Directory for scalers and metadata
+scalers_dir = scalers
+# Directory for results and plots
+results_dir = results
+# Save training history as JSON
+save_history = true
+# Generate visualization plots
+generate_plots = true

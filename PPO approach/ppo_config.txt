@@ -1,0 +1,108 @@
+[ENVIRONMENT]
+# Action space type: discrete or continuous
+action_space = discrete
+# Transaction cost per trade (0.0025 = 0.25%)
+transaction_cost = 0.0025
+# Initial capital for simulation
+initial_capital = 10000
+# Maximum position size (1.0 = 100% of capital)
+max_position = 1.0
+# Sequence length for prediction models
+sequence_length = 60
+
+[PPO]
+# Learning rate
+learning_rate = 0.0003
+# Steps per update (CRITICAL: Lower = more frequent GPU training = better GPU utilization)
+# With CPU-bound environment, lower n_steps means GPU trains more often
+# With 6 parallel environments, n_steps=512 means ~85 steps per env before training
+# Reduced to 512 for MAXIMUM GPU training frequency (4x more often than original 2048)
+# This maximizes GPU utilization and training speed
+# Trade-off: Less sample efficiency but MUCH faster training (target: 4 hours)
+# NOTE: With vectorized envs, this is total steps across all parallel envs
+n_steps = 512
+# Batch size (MAXIMUM for 95% GPU utilization - target: ~14GB/15GB)
+# Increased from 1024 to 1536 to use MORE GPU memory
+# With 15GB GPU, 1536 batch size will use ~10-12GB GPU memory (65-80% utilization)
+# Combined with larger network [1024, 512], this should reach 80-95% GPU usage
+batch_size = 1536
+# Training epochs per update (more epochs = more GPU computation per update)
+# Increased for MAXIMUM GPU utilization (target: 95%)
+# More epochs = more GPU computation per update cycle
+n_epochs = 15 
+# Discount factor
+gamma = 0.99
+# GAE lambda
+gae_lambda = 0.95
+# Clipping range
+clip_range = 0.2
+# Entropy coefficient (encourages exploration)
+ent_coef = 0.01
+# Value function coefficient
+vf_coef = 0.5
+# Max gradient norm
+max_grad_norm = 0.5
+
+[REWARD]
+# Scale factor for profit
+profit_scale = 100
+# Transaction cost penalty scale
+cost_scale = 1.0
+# Drawdown penalty weight
+drawdown_penalty = 0.1
+# Max drawdown threshold before increased penalty
+max_drawdown_threshold = 0.1
+# Sharpe ratio bonus weight
+sharpe_bonus = 0.5
+# Minimum periods for Sharpe calculation
+min_periods_for_sharpe = 10
+# Enable hold penalty (discourage excessive holding)
+enable_hold_penalty = false
+# Hold penalty weight (if enabled)
+hold_penalty = 0.01
+# Max hold periods before penalty kicks in
+max_hold_periods = 100
+# Invalid action penalty
+invalid_action_penalty = -1.0
+# Clip reward values
+clip_reward = true
+reward_clip_value = 10.0
+
+[TRAINING]
+# Total training timesteps - REDUCED for 4-hour training target
+# Original: 1,000,000 timesteps = 80 hours
+# Reduced to 150,000 timesteps = ~4 hours (with optimizations)
+# This is 15% of original - model will learn basic strategies
+# For better results, consider 200,000-300,000 (6-8 hours)
+total_timesteps = 150000
+# Checkpoint frequency (for Colab timeout recovery)
+checkpoint_freq = 25000
+# Evaluation frequency
+eval_freq = 5000
+# Number of evaluation episodes
+n_eval_episodes = 5
+# Train/test split
+train_test_split = 0.8
+# Maximum steps per episode (None = use full data)
+max_episode_steps = 1000
+# Device: auto, cpu, cuda
+# Set to 'cuda' to explicitly use GPU (better utilization)
+device = cuda
+
+[MODELS]
+# Prediction model to use: lstm, gru, bilstm, dlstm, ensemble
+# Changed from ensemble to dlstm for 4x faster environment steps
+# Ensemble (4 models) is slower but more accurate
+# Single model (dlstm) is faster and still effective for PPO training
+prediction_model = dlstm
+# Dataset name (without path)
+dataset = ETH-EUR_1H_20240101-20251231
+# Models to include in ensemble (comma-separated) - not used when prediction_model != ensemble
+ensemble_models = lstm,gru,bilstm,dlstm
+# Prediction horizons for multi-step ahead predictions (comma-separated)
+# Reduced from 1,2,3,5,10 to 1,2,3 for faster environment steps
+# Removed medium-term horizons (5,10) to reduce observation space and computation
+# Format: 1,2,3 (short-term only - faster training)
+prediction_horizons = 1,2,3
+
+
