@@ -54,49 +54,28 @@ class PredictionModel:
             True if loaded successfully, False otherwise
         """
         try:
-            import tensorflow as tf
-            from tensorflow import keras
-            
-            # Configure TensorFlow to use GPU
-            gpus = tf.config.list_physical_devices('GPU')
-            if gpus:
-                try:
-                    # Enable memory growth to avoid allocating all GPU memory at once
-                    for gpu in gpus:
-                        tf.config.experimental.set_memory_growth(gpu, True)
-                    print(f"  Using GPU: {gpus[0].name}")
-                except RuntimeError as e:
-                    print(f"  GPU configuration error: {e}")
+            # Get device
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            if torch.cuda.is_available():
+                print(f"  Using GPU: {torch.cuda.get_device_name(0)}")
             else:
                 print("  No GPU available, using CPU")
             
             models_path = get_models_path()
             scalers_path = get_scalers_path()
             
-            # Find model file
-            model_pattern = f"{self.model_name}_{self.dataset_name}_classification.keras"
+            # Find model file (PyTorch format)
+            model_pattern = f"{self.model_name}_{self.dataset_name}_classification.pth"
             model_path = models_path / model_pattern
             
             if not model_path.exists():
                 # Try to find with partial match
-                matching = list(models_path.glob(f"{self.model_name}*{self.dataset_name}*.keras"))
+                matching = list(models_path.glob(f"{self.model_name}*{self.dataset_name}*.pth"))
                 if matching:
                     model_path = matching[0]
                 else:
                     print(f"Model not found: {model_pattern}")
                     return False
-            
-            # Load model with compatibility fix for quantization_config
-            print(f"Loading model: {model_path.name}")
-            
-            # Create custom Dense layer that ignores quantization_config
-            from keras.layers import Dense as OriginalDense
-            class CompatibleDense(OriginalDense):
-                @classmethod
-                def from_config(cls, config):
-                    config = config.copy()
-                    config.pop('quantization_config', None)
-                    return super().from_config(config)
             
             # Load scaler first to get model architecture info
             scaler_pattern = f"scaler_{self.dataset_name}.pkl"
@@ -144,6 +123,7 @@ class PredictionModel:
             )
             
             # Load model weights
+            print(f"Loading PyTorch model: {model_path.name}")
             self.model.load_state_dict(torch.load(str(model_path), map_location=device))
             self.model.to(device)
             self.model.eval()
@@ -589,7 +569,7 @@ def get_available_models(dataset_name: str = None) -> List[str]:
     if not models_path.exists():
         return []
     
-    pattern = f"*{dataset_name}*.keras" if dataset_name else "*.keras"
+    pattern = f"*{dataset_name}*.pth" if dataset_name else "*.pth"
     return [f.name for f in models_path.glob(pattern)]
 
 
