@@ -14,15 +14,11 @@ numpy>=1.21.0,<2.0.0
 # ==============================================
 
 # TensorFlow (for prediction models: LSTM, GRU, BiLSTM, DLSTM)
-# NOTE: RunPod has CuDNN 9.1.0, but TensorFlow 2.15.0 expects CuDNN 8.9
-# Try these versions in order:
-# 1. tensorflow==2.15.0.post1 (hotfix, may work better)
-# 2. tensorflow==2.16.1 (may support newer CuDNN)
-# 3. tensorflow==2.15.0 (fallback, will use CPU)
-# Run fix_tensorflow_gpu.sh to find the best version for your setup
-tensorflow==2.15.0.post1  # Try hotfix version first (better CuDNN compatibility)
-# Alternative: tensorflow==2.16.1  # If post1 doesn't work, try 2.16.1
-# Fallback: tensorflow==2.15.0  # Original version (may only work on CPU)
+# SUCCESS: tf-nightly works with CuDNN 9.1.0 and CUDA 12.4 on RunPod!
+# tf-nightly (2.21.0.dev) successfully detects GPU where stable versions failed
+# This is the latest development build with support for newer CuDNN versions
+tf-nightly  # GPU-enabled TensorFlow (compatible with CuDNN 9.1.0)
+# Note: If you need a stable version later, try tensorflow==2.16.1 or tensorflow==2.15.0.post1
 
 # Scikit-learn (for data preprocessing)
 scikit-learn>=1.2.0,<2.0.0
