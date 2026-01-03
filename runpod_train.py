@@ -303,42 +303,73 @@ else:
         print("⚠ Config file not found, using defaults")
         config = None
 
-# Train all models
-print(f"\nTraining models on dataset: {DATASET_NAME}")
-print("Models: LSTM, GRU, BiLSTM, DLSTM")
-print("Task: Classification (Fall, Stationary, Rise)")
-print("-" * 60)
+# Check if all models already exist
+models_dir = PROJECT_PATH / 'models'
+required_models = ['lstm', 'gru', 'bilstm', 'dlstm']
+model_files = {}
+all_models_exist = True
 
-try:
-    results = train_all_models(
-        datasets_dir=str(get_datasets_path()),
-        config=config,
-        task='classification',
-        models=['lstm', 'gru', 'bilstm', 'dlstm'],
-        specific_dataset=DATASET_NAME,
-        use_ensemble=False
-    )
+for model_name in required_models:
+    model_pattern = f"{model_name}_{DATASET_NAME}_classification.pth"
+    model_path = models_dir / model_pattern
     
-    if results:
-        print("\n" + "=" * 60)
-        print("✓ All prediction models trained successfully!")
-        print("=" * 60)
+    if not model_path.exists():
+        # Try partial match
+        matching = list(models_dir.glob(f"{model_name}*{DATASET_NAME}*.pth"))
+        if matching:
+            model_path = matching[0]
+        else:
+            all_models_exist = False
+            break
+    
+    model_files[model_name] = model_path
+
+if all_models_exist:
+    print(f"✓ All prediction models already exist for dataset: {DATASET_NAME}")
+    print("  Skipping prediction model training...")
+    for model_name, model_path in model_files.items():
+        print(f"  ✓ {model_name.upper()}: {model_path.name}")
+    results = []  # Empty results, models already exist
+else:
+    print(f"⚠ Some models missing. Training prediction models...")
+    print("=" * 60)
+    
+    # Train all models
+    print(f"\nTraining models on dataset: {DATASET_NAME}")
+    print("Models: LSTM, GRU, BiLSTM, DLSTM")
+    print("Task: Classification (Fall, Stationary, Rise)")
+    print("-" * 60)
+
+    try:
+        results = train_all_models(
+            datasets_dir=str(get_datasets_path()),
+            config=config,
+            task='classification',
+            models=['lstm', 'gru', 'bilstm', 'dlstm'],
+            specific_dataset=DATASET_NAME,
+            use_ensemble=False
+        )
         
-        # Print summary
-        print("\nTraining Summary:")
-        for result in results:
-            model_name = result['model_name']
-            metrics = result['metrics']
-            print(f"\n{model_name.upper()}:")
-            for metric, value in metrics.items():
-                if isinstance(value, float):
-                    print(f"  {metric}: {value:.6f}")
-                else:
-                    print(f"  {metric}: {value}")
-    else:
-        print("\n⚠ No models were trained. Check dataset name and paths.")
-        
-except Exception as e:
+        if results:
+            print("\n" + "=" * 60)
+            print("✓ All prediction models trained successfully!")
+            print("=" * 60)
+            
+            # Print summary
+            print("\nTraining Summary:")
+            for result in results:
+                model_name = result['model_name']
+                metrics = result['metrics']
+                print(f"\n{model_name.upper()}:")
+                for metric, value in metrics.items():
+                    if isinstance(value, float):
+                        print(f"  {metric}: {value:.6f}")
+                    else:
+                        print(f"  {metric}: {value}")
+        else:
+            print("\n⚠ No models were trained. Check dataset name and paths.")
+            
+    except Exception as e:
     print(f"\n❌ ERROR during training: {e}")
     import traceback
     traceback.print_exc()
