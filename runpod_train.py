@@ -9,6 +9,20 @@ import sys
 from pathlib import Path
 import subprocess
 
+# Set LD_LIBRARY_PATH for TensorFlow GPU support (if CUDA libraries exist)
+# This helps TensorFlow find CUDA/cuDNN libraries
+if os.path.exists('/usr/local/cuda/lib64'):
+    cuda_lib_path = '/usr/local/cuda/lib64'
+    current_ld_path = os.environ.get('LD_LIBRARY_PATH', '')
+    if cuda_lib_path not in current_ld_path:
+        os.environ['LD_LIBRARY_PATH'] = f"{cuda_lib_path}:{current_ld_path}" if current_ld_path else cuda_lib_path
+
+# Also check common CUDA locations
+for cuda_path in ['/usr/lib/x86_64-linux-gnu', '/usr/local/cuda-12.1/lib64', '/usr/local/cuda-12.4/lib64']:
+    if os.path.exists(cuda_path) and cuda_path not in os.environ.get('LD_LIBRARY_PATH', ''):
+        current_ld = os.environ.get('LD_LIBRARY_PATH', '')
+        os.environ['LD_LIBRARY_PATH'] = f"{cuda_path}:{current_ld}" if current_ld else cuda_path
+
 # ============================================
 # STEP 1: Setup Paths
 # ============================================
@@ -158,6 +172,22 @@ else:
 try:
     import tensorflow as tf
     print(f"✓ TensorFlow: {tf.__version__}")
+    
+    # Check TensorFlow GPU support
+    print(f"  CUDA built-in: {tf.test.is_built_with_cuda()}")
+    print(f"  GPU support: {tf.test.is_built_with_gpu_support()}")
+    
+    # Try to list GPU devices
+    try:
+        gpus = tf.config.list_physical_devices('GPU')
+        if gpus:
+            print(f"  ✓ GPU devices detected: {len(gpus)}")
+        else:
+            print("  ⚠ No GPU devices found by TensorFlow")
+            print("  💡 This may be a library loading issue")
+    except Exception as e:
+        print(f"  ⚠ Error checking GPU: {e}")
+        
 except ImportError:
     print("⚠ TensorFlow not available")
 

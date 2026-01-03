@@ -14,11 +14,12 @@ numpy>=1.21.0,<2.0.0
 # ==============================================
 
 # TensorFlow (for prediction models: LSTM, GRU, BiLSTM, DLSTM)
-# OPTIMIZATION: Pin to version compatible with CuDNN 9.1.0 for optimal performance
+# OPTIMIZATION: Use tensorflow[and-cuda] for GPU support with CUDA 12.x
+# This package includes TensorFlow with CUDA/cuDNN support pre-configured
 # TensorFlow 2.15.0 works with CuDNN 9.1.0 and CUDA 12.x
-# Alternative: Use >=2.16.0 if you upgrade CuDNN to 9.3.0+
-tensorflow==2.15.0  # Optimized for CuDNN 9.1.0 (RunPod default)
-# tensorflow>=2.13.0,<3.0.0  # Original - may cause CuDNN version mismatch
+# Note: On RunPod, you may need to set LD_LIBRARY_PATH for TensorFlow to find CUDA libraries
+tensorflow[and-cuda]==2.15.0  # GPU support with CUDA 12.x and CuDNN 9.1.0
+# Alternative if above doesn't work: tensorflow==2.15.0 (may need manual CUDA setup)
 
 # Scikit-learn (for data preprocessing)
 scikit-learn>=1.2.0,<2.0.0

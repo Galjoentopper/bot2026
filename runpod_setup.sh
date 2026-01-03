@@ -105,6 +105,13 @@ if [ -f "requirements.txt" ]; then
     
     echo "Installing packages (this may take a while)..."
     python3 -m pip install --upgrade pip setuptools wheel
+    
+    # Set LD_LIBRARY_PATH for TensorFlow GPU support (if CUDA libraries exist)
+    if [ -d "/usr/local/cuda/lib64" ]; then
+        export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+        echo "✓ CUDA libraries found, setting LD_LIBRARY_PATH"
+    fi
+    
     python3 -m pip install -r requirements.txt
     
     echo "✓ Dependencies installed"
