@@ -38,7 +38,7 @@ shimmy>=0.2.0,<1.0.0
 # For CPU only: Remove --index-url flag
 torch>=2.0.0,<3.0.0
 torchvision>=0.15.0,<1.0.0
-torchaudio>=2.0.0,<1.0.0
+torchaudio>=2.0.0,<3.0.0
 
 # ==============================================
 # Visualization & Utilities
