@@ -106,10 +106,23 @@ if [ -f "requirements.txt" ]; then
     echo "Installing packages (this may take a while)..."
     python3 -m pip install --upgrade pip setuptools wheel
     
-    # Set LD_LIBRARY_PATH for TensorFlow GPU support (if CUDA libraries exist)
-    if [ -d "/usr/local/cuda/lib64" ]; then
-        export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-        echo "✓ CUDA libraries found, setting LD_LIBRARY_PATH"
+    # Set LD_LIBRARY_PATH for TensorFlow GPU support (RunPod CUDA 12.4 structure)
+    if [ -d "/usr/local/cuda-12.4/targets/x86_64-linux/lib" ]; then
+        export LD_LIBRARY_PATH=/usr/local/cuda-12.4/targets/x86_64-linux/lib:$LD_LIBRARY_PATH
+        echo "✓ CUDA 12.4 libraries found"
+    fi
+    if [ -d "/usr/local/lib/python3.11/dist-packages/nvidia/cudnn/lib" ]; then
+        export LD_LIBRARY_PATH=/usr/local/lib/python3.11/dist-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH
+        echo "✓ cuDNN libraries found"
+    fi
+    if [ -d "/usr/local/lib/python3.11/dist-packages/nvidia/cuda_runtime/lib" ]; then
+        export LD_LIBRARY_PATH=/usr/local/lib/python3.11/dist-packages/nvidia/cuda_runtime/lib:$LD_LIBRARY_PATH
+    fi
+    if [ -d "/usr/local/lib/python3.11/dist-packages/nvidia/cublas/lib" ]; then
+        export LD_LIBRARY_PATH=/usr/local/lib/python3.11/dist-packages/nvidia/cublas/lib:$LD_LIBRARY_PATH
+    fi
+    if [ -d "/usr/lib/x86_64-linux-gnu" ]; then
+        export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
     fi
     
     python3 -m pip install -r requirements.txt

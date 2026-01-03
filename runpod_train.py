@@ -9,19 +9,33 @@ import sys
 from pathlib import Path
 import subprocess
 
-# Set LD_LIBRARY_PATH for TensorFlow GPU support (if CUDA libraries exist)
-# This helps TensorFlow find CUDA/cuDNN libraries
-if os.path.exists('/usr/local/cuda/lib64'):
-    cuda_lib_path = '/usr/local/cuda/lib64'
-    current_ld_path = os.environ.get('LD_LIBRARY_PATH', '')
-    if cuda_lib_path not in current_ld_path:
-        os.environ['LD_LIBRARY_PATH'] = f"{cuda_lib_path}:{current_ld_path}" if current_ld_path else cuda_lib_path
+# Set LD_LIBRARY_PATH for TensorFlow GPU support
+# TensorFlow needs to find CUDA/cuDNN libraries at runtime
+# Based on RunPod's CUDA 12.4 installation structure
+cuda_paths = [
+    '/usr/local/cuda-12.4/targets/x86_64-linux/lib',  # Main CUDA libraries (libcudart, libcublas)
+    '/usr/local/lib/python3.11/dist-packages/nvidia/cudnn/lib',  # cuDNN libraries
+    '/usr/local/lib/python3.11/dist-packages/nvidia/cuda_runtime/lib',  # CUDA runtime
+    '/usr/local/lib/python3.11/dist-packages/nvidia/cublas/lib',  # cuBLAS
+    '/usr/lib/x86_64-linux-gnu',  # System CUDA driver
+    '/usr/local/cuda-12.4/lib64',  # Alternative CUDA path
+]
 
-# Also check common CUDA locations
-for cuda_path in ['/usr/lib/x86_64-linux-gnu', '/usr/local/cuda-12.1/lib64', '/usr/local/cuda-12.4/lib64']:
-    if os.path.exists(cuda_path) and cuda_path not in os.environ.get('LD_LIBRARY_PATH', ''):
-        current_ld = os.environ.get('LD_LIBRARY_PATH', '')
-        os.environ['LD_LIBRARY_PATH'] = f"{cuda_path}:{current_ld}" if current_ld else cuda_path
+current_ld_path = os.environ.get('LD_LIBRARY_PATH', '')
+ld_paths_to_add = []
+
+for cuda_path in cuda_paths:
+    if os.path.exists(cuda_path) and cuda_path not in current_ld_path:
+        ld_paths_to_add.append(cuda_path)
+
+if ld_paths_to_add:
+    new_ld_path = ':'.join(ld_paths_to_add)
+    if current_ld_path:
+        os.environ['LD_LIBRARY_PATH'] = f"{new_ld_path}:{current_ld_path}"
+    else:
+        os.environ['LD_LIBRARY_PATH'] = new_ld_path
+    print(f"✓ Set LD_LIBRARY_PATH for CUDA libraries")
+    print(f"  Added {len(ld_paths_to_add)} path(s) to LD_LIBRARY_PATH")
 
 # ============================================
 # STEP 1: Setup Paths
