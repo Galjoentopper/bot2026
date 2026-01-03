@@ -941,36 +941,45 @@ def train_single_model(model_name: str, dataset_name: str, df: pd.DataFrame,
     
     # Generate plots
     if config.getboolean('OUTPUT', 'generate_plots'):
-        # Training history plot
-        history_plot_path = os.path.join(results_dir, 
-                                         f"training_{model_name}_{dataset_name}_{task}.png")
-        plot_training_history(history, history_plot_path)
+        try:
+            # Training history plot
+            history_plot_path = os.path.join(results_dir, 
+                                             f"training_{model_name}_{dataset_name}_{task}.png")
+            plot_training_history(history, history_plot_path)
+        except Exception as e:
+            print(f"⚠️  Could not generate training history plot: {e}")
         
-        if task == 'classification':
-            # Confusion matrix
-            cm_plot_path = os.path.join(results_dir,
-                                        f"confusion_{model_name}_{dataset_name}.png")
-            plot_confusion_matrix(data['y_test'], y_pred, save_path=cm_plot_path)
-        else:
-            # Predictions plot
-            pred_plot_path = os.path.join(results_dir,
-                                          f"predictions_{model_name}_{dataset_name}.png")
-            
-            # Inverse transform for plotting
-            y_true_inv = data['target_scaler'].inverse_transform(
-                data['y_test'].reshape(-1, 1)).flatten()
-            y_pred_inv = data['target_scaler'].inverse_transform(
-                y_pred.reshape(-1, 1)).flatten()
-            
-            plot_predictions(y_true_inv, y_pred_inv,
-                           title=f"{model_name.upper()} - {dataset_name}",
-                           save_path=pred_plot_path)
+        try:
+            if task == 'classification':
+                # Confusion matrix
+                cm_plot_path = os.path.join(results_dir,
+                                            f"confusion_{model_name}_{dataset_name}.png")
+                plot_confusion_matrix(data['y_test'], y_pred, save_path=cm_plot_path)
+            else:
+                # Predictions plot
+                pred_plot_path = os.path.join(results_dir,
+                                              f"predictions_{model_name}_{dataset_name}.png")
+                
+                # Inverse transform for plotting
+                y_true_inv = data['target_scaler'].inverse_transform(
+                    data['y_test'].reshape(-1, 1)).flatten()
+                y_pred_inv = data['target_scaler'].inverse_transform(
+                    y_pred.reshape(-1, 1)).flatten()
+                
+                plot_predictions(y_true_inv, y_pred_inv,
+                               title=f"{model_name.upper()} - {dataset_name}",
+                               save_path=pred_plot_path)
+        except Exception as e:
+            print(f"⚠️  Could not generate prediction/confusion plot: {e}")
         
-        # Feature importance plot
-        feature_plot_path = os.path.join(results_dir,
-                                         f"features_{model_name}_{dataset_name}.png")
-        plot_feature_importance(model, data['feature_names'], 
-                               data['X_test'], feature_plot_path)
+        try:
+            # Feature importance plot
+            feature_plot_path = os.path.join(results_dir,
+                                             f"features_{model_name}_{dataset_name}.png")
+            plot_feature_importance(model, data['feature_names'], 
+                                   data['X_test'], feature_plot_path)
+        except Exception as e:
+            print(f"⚠️  Could not generate feature importance plot: {e}")
     
     return {
         'model_name': model_name,
