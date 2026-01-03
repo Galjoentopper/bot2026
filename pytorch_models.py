@@ -228,10 +228,18 @@ class DLSTMModel(nn.Module):
         
         # Trend extraction using Average Pooling
         # padding='same' equivalent: padding = (kernel_size - 1) // 2
+        # But we need to ensure output size matches input size exactly
+        # For odd kernel_size: padding = (kernel_size - 1) // 2
+        # For even kernel_size: we need to handle it differently
+        if ma_window % 2 == 1:
+            padding = (ma_window - 1) // 2
+        else:
+            padding = (ma_window - 2) // 2  # Adjust for even kernel size
+        
         self.avg_pool = nn.AvgPool1d(
             kernel_size=ma_window,
             stride=1,
-            padding=(ma_window - 1) // 2  # 'same' padding
+            padding=padding
         )
         
         # LSTM on Trend branch
@@ -281,6 +289,18 @@ class DLSTMModel(nn.Module):
         trend = self.avg_pool(x_transposed)
         # Convert back to (batch, seq_len, features)
         trend = trend.transpose(1, 2)
+        
+        # Ensure trend has same sequence length as input (handle padding edge cases)
+        seq_len = x.size(1)
+        if trend.size(1) != seq_len:
+            # Trim or pad to match
+            if trend.size(1) > seq_len:
+                trend = trend[:, :seq_len, :]
+            else:
+                # Pad with last value
+                padding = seq_len - trend.size(1)
+                last_val = trend[:, -1:, :].expand(-1, padding, -1)
+                trend = torch.cat([trend, last_val], dim=1)
         
         # Remainder: Original - Trend
         remainder = x - trend
