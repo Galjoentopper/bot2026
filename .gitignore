@@ -6,8 +6,8 @@
 # Large Data Files
 # ============================================
 # Exclude all CSV datasets (they're too large for git)
-datasets/*.csv
-datasets/**/*.csv
+#datasets/*.csv
+#datasets/**/*.csv
 
 # Keep dataset folder structure, just ignore CSV files
 !datasets/.gitkeep
