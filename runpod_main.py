@@ -14,6 +14,24 @@ Features:
 
 import os
 import sys
+
+# Set LD_LIBRARY_PATH for TensorFlow GPU support BEFORE any TensorFlow imports
+# This must be done before importing TensorFlow, as it loads libraries at import time
+cuda_paths = [
+    '/usr/local/cuda-12.4/targets/x86_64-linux/lib',  # Main CUDA libraries
+    '/usr/local/lib/python3.11/dist-packages/nvidia/cudnn/lib',  # cuDNN
+    '/usr/local/lib/python3.11/dist-packages/nvidia/cuda_runtime/lib',  # CUDA runtime
+    '/usr/local/lib/python3.11/dist-packages/nvidia/cublas/lib',  # cuBLAS
+    '/usr/lib/x86_64-linux-gnu',  # System CUDA driver
+]
+
+current_ld_path = os.environ.get('LD_LIBRARY_PATH', '')
+ld_paths_to_add = [p for p in cuda_paths if os.path.exists(p) and p not in current_ld_path]
+
+if ld_paths_to_add:
+    new_ld_path = ':'.join(ld_paths_to_add)
+    os.environ['LD_LIBRARY_PATH'] = f"{new_ld_path}:{current_ld_path}" if current_ld_path else new_ld_path
+
 import argparse
 import logging
 import shutil
