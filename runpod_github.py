@@ -132,13 +132,25 @@ def setup_github_auth(repo_path: Path, token: Optional[str] = None) -> bool:
                     # Remove existing token if present
                     if '@' in url:
                         url = url.split('@', 1)[1]
+                    # Remove protocol
                     if url.startswith('https://'):
                         url = url.replace('https://', '')
                     elif url.startswith('http://'):
                         url = url.replace('http://', '')
+                    # Remove git@ prefix if present (SSH format)
+                    if url.startswith('git@'):
+                        url = url.replace('git@', '')
+                    # Extract repository path (everything after github.com/)
+                    if 'github.com/' in url:
+                        repo_path = url.split('github.com/', 1)[1]
+                    elif 'github.com:' in url:
+                        repo_path = url.split('github.com:', 1)[1]
+                    else:
+                        # Fallback: assume the URL is already just the repo path
+                        repo_path = url
                     
                     # Construct new URL with token
-                    new_url = f"https://{token}@github.com/{url}"
+                    new_url = f"https://{token}@github.com/{repo_path}"
                     run_git_command(['remote', 'set-url', 'origin', new_url], cwd=repo_path)
                     return True
         except Exception as e:
