@@ -134,6 +134,8 @@ def train_model(model: nn.Module, X_train: np.ndarray, y_train: np.ndarray,
     patience = config.getint('TRAINING', 'early_stopping_patience')
     learning_rate = config.getfloat('MODEL', 'learning_rate')
     validation_split = config.getfloat('TRAINING', 'validation_split')
+    # Weight decay (L2 regularization) - research-based default
+    weight_decay = config.getfloat('MODEL', 'weight_decay', fallback=1e-5)
     
     # Split validation set if not provided
     if X_val is None or y_val is None:
@@ -143,40 +145,27 @@ def train_model(model: nn.Module, X_train: np.ndarray, y_train: np.ndarray,
         X_train = X_train[:train_size]
         y_train = y_train[:train_size]
     
-    # Optimize batch size for GPU
+    # Batch size validation (RESEARCH-BASED)
+    # Note: Research shows smaller batches (64) improve generalization for classification tasks
+    # Imperial College paper used batch_size=64 for best results
+    # We respect the config value and only reduce if it causes issues (OOM or too few steps)
     train_size = len(X_train)
     min_steps_per_epoch = 50
-    max_steps_per_epoch = 200
+    
+    steps_per_epoch = train_size // batch_size
+    
+    # Only reduce batch size if it causes too few steps per epoch (would hurt training)
+    if steps_per_epoch < min_steps_per_epoch:
+        optimal_batch_size = train_size // min_steps_per_epoch
+        print(f"  ⚠️  Batch size {batch_size} too large (only {steps_per_epoch} steps per epoch)")
+        print(f"     Reducing to {optimal_batch_size} for {min_steps_per_epoch}+ steps per epoch")
+        batch_size = optimal_batch_size
+        steps_per_epoch = train_size // batch_size
     
     if torch.cuda.is_available():
-        target_steps = 75
-        optimal_batch_for_steps = max(32, train_size // target_steps)
-        
-        if batch_size < 512:
-            proposed_batch_size = min(1536, max(512, batch_size * 4))
-            max_batch_for_min_steps = train_size // min_steps_per_epoch
-            optimal_batch_size = min(proposed_batch_size, max_batch_for_min_steps)
-            
-            if optimal_batch_size > batch_size:
-                steps_per_epoch = train_size // optimal_batch_size
-                print(f"  📈 GPU detected: Increasing batch size from {batch_size} to {optimal_batch_size}")
-                print(f"     This gives {steps_per_epoch} steps per epoch (target: {target_steps}, min: {min_steps_per_epoch})")
-                batch_size = optimal_batch_size
-            else:
-                steps_per_epoch = train_size // batch_size
-                print(f"  📈 GPU detected: Batch size {batch_size} gives {steps_per_epoch} steps per epoch")
-                print(f"     (Limited by dataset size to maintain {min_steps_per_epoch}+ steps per epoch)")
-        else:
-            steps_per_epoch = train_size // batch_size
-            if steps_per_epoch < min_steps_per_epoch:
-                optimal_batch_size = train_size // min_steps_per_epoch
-                print(f"  ⚠️  Batch size {batch_size} too large (only {steps_per_epoch} steps per epoch)")
-                print(f"     Reducing to {optimal_batch_size} for {min_steps_per_epoch} steps per epoch")
-                batch_size = optimal_batch_size
-                steps_per_epoch = train_size // batch_size
-            print(f"  📈 GPU detected: Using batch size {batch_size} ({steps_per_epoch} steps per epoch)")
+        print(f"  📈 GPU detected: Using batch size {batch_size} ({steps_per_epoch} steps per epoch)")
+        print(f"     Research-based batch size for better generalization (Imperial College: 64)")
     else:
-        steps_per_epoch = train_size // batch_size
         print(f"  📊 Using batch size {batch_size} ({steps_per_epoch} steps per epoch)")
     
     # Create data loaders
@@ -200,13 +189,16 @@ def train_model(model: nn.Module, X_train: np.ndarray, y_train: np.ndarray,
     else:
         criterion = nn.MSELoss()
     
-    # Optimizer
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    # Optimizer with weight decay (L2 regularization)
+    # Weight decay helps reduce overfitting by penalizing large weights
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     
-    # Learning rate scheduler
+    # Learning rate scheduler (RESEARCH-BASED)
+    # Reduces learning rate when validation loss plateaus
+    # Patience=5 epochs, factor=0.5 (halve LR), min_lr=1e-6
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.5, patience=patience // 2,
-        min_lr=1e-7, verbose=True
+        optimizer, mode='min', factor=0.5, patience=5,
+        min_lr=1e-6, verbose=True
     )
     
     # Early stopping

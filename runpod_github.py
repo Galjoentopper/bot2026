@@ -209,13 +209,15 @@ def push_to_github(repo_path: Path, branch: str = 'main', force: bool = False) -
         # Configure Git for large file pushes
         configure_git_for_large_files(repo_path)
         
-        # Check authentication
-        if not check_git_auth(repo_path):
-            print("Warning: Git authentication not configured. Attempting to setup...")
-            if not setup_github_auth(repo_path):
+        # Always attempt to setup authentication (will update remote URL if token is available)
+        # This ensures the remote URL is updated even if check_git_auth returns True
+        if not setup_github_auth(repo_path):
+            # If setup fails, check if authentication is already configured
+            if not check_git_auth(repo_path):
                 print("Error: Could not setup Git authentication")
                 print("Please set GITHUB_TOKEN environment variable or configure SSH keys")
                 return False
+            # If auth is already configured (e.g., SSH), continue
         
         # Push with increased timeout
         cmd = ['push']
