@@ -15,13 +15,13 @@ train_test_split = 0.8
 use_technical_indicators = true
 
 [MODEL]
-# Hidden units per layer - MAXIMIZED for GPU utilization (target: 95%)
+# Hidden units per layer - OPTIMIZED for RTX 4090 (24GB VRAM)
 # Larger networks use more GPU memory and compute
-# Options: 128 (standard), 256 (large), 512 (very large)
-# Increased to 256 for maximum GPU utilization
-units = 256
+# Options: 128 (standard), 256 (large), 512 (very large), 768 (maximum)
+# Increased to 512 for maximum GPU utilization on RTX 4090
+units = 512
 # Number of recurrent layers - more layers = more GPU usage
-layers = 3
+layers = 4
 # Dropout rate for regularization - slightly reduced to allow more learning
 dropout = 0.15
 # Learning rate - slightly higher for faster learning
@@ -30,11 +30,11 @@ learning_rate = 0.0002
 optimizer = adam
 
 [TRAINING]
-# Batch size - MAXIMUM GPU utilization (target: 95% of 15GB = ~14GB)
-# With 15GB GPU, we can use very large batches for maximum throughput
-# Options: 256 (good), 512 (very good), 768 (excellent), 1024 (maximum)
-# Auto-adjustment will push to 1024+ for 95% GPU utilization
-batch_size = 512
+# Batch size - OPTIMIZED for RTX 4090 (24GB VRAM)
+# With 24GB GPU, we can use very large batches for maximum throughput
+# Options: 512 (good), 1024 (very good), 1536 (excellent), 2048 (maximum)
+# Auto-adjustment will push to 2048+ for 90-95% GPU utilization
+batch_size = 1024
 # Maximum epochs
 epochs = 150
 # Early stopping patience - increased to allow more training

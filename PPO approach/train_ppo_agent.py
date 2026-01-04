@@ -263,12 +263,12 @@ def train_ppo(
         print("  ⚠ Vectorized environments not available, using single environment")
         print("  Install stable-baselines3 for parallel processing: pip install stable-baselines3")
     
-    # Number of parallel environments - OPTIMIZED for RAM/GPU balance
-    # With 12.7GB RAM, 8 envs was using 11.4GB (89.8%) - too high!
-    # Reduced to 6 envs to free up RAM (~8-9GB usage = 65-70%) for better GPU utilization
-    # Each env uses ~1.5GB RAM (includes ensemble models), so 6 envs = ~9GB RAM
-    # This leaves headroom for GPU operations and prevents RAM bottleneck
-    n_envs = 6  # Reduced from 8 to 6 to free RAM and improve GPU utilization
+    # Number of parallel environments - OPTIMIZED for RTX 4090 with 194GB RAM
+    # With 194GB RAM available, we can run many more parallel environments
+    # Each env uses ~1.5GB RAM (includes prediction models), so 16 envs = ~24GB RAM
+    # This leaves 170GB+ headroom for GPU operations and prevents RAM bottleneck
+    # More parallel envs = faster data collection = better GPU utilization
+    n_envs = 16  # OPTIMIZED for high-RAM systems (194GB available)
     
     def make_env(rank: int = 0, train_mode: bool = True):
         """Create a single environment."""

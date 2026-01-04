@@ -13,23 +13,22 @@ sequence_length = 60
 [PPO]
 # Learning rate
 learning_rate = 0.0003
-# Steps per update (CRITICAL: Lower = more frequent GPU training = better GPU utilization)
-# With CPU-bound environment, lower n_steps means GPU trains more often
-# With 6 parallel environments, n_steps=512 means ~85 steps per env before training
-# Reduced to 512 for MAXIMUM GPU training frequency (4x more often than original 2048)
-# This maximizes GPU utilization and training speed
-# Trade-off: Less sample efficiency but MUCH faster training (target: 4 hours)
+# Steps per update (OPTIMIZED for RTX 4090 - balance GPU utilization and sample efficiency)
+# With 12-16 parallel environments, n_steps=1024 means ~64-85 steps per env before training
+# Increased to 1024 for better sample efficiency while maintaining high GPU utilization
+# More parallel envs (12-16) means faster data collection, so we can use more steps
 # NOTE: With vectorized envs, this is total steps across all parallel envs
-n_steps = 512
-# Batch size (MAXIMUM for 95% GPU utilization - target: ~14GB/15GB)
-# Increased from 1024 to 1536 to use MORE GPU memory
-# With 15GB GPU, 1536 batch size will use ~10-12GB GPU memory (65-80% utilization)
-# Combined with larger network [1024, 512], this should reach 80-95% GPU usage
-batch_size = 1536
+n_steps = 1024
+# Batch size (OPTIMIZED for RTX 4090 with 24GB VRAM - target: 90-95% utilization)
+# RTX 4090 has 24GB VRAM, so we can use much larger batches
+# Increased to 2560 for maximum GPU utilization (~18-20GB VRAM usage)
+# Combined with larger network [1536, 768], this should reach 90-95% GPU usage
+batch_size = 2560
 # Training epochs per update (more epochs = more GPU computation per update)
-# Increased for MAXIMUM GPU utilization (target: 95%)
+# Increased to 20 for MAXIMUM GPU utilization (target: 90-95%)
 # More epochs = more GPU computation per update cycle
-n_epochs = 15 
+# With larger batch size (2560), more epochs will fully utilize RTX 4090
+n_epochs = 20 
 # Discount factor
 gamma = 0.99
 # GAE lambda

@@ -196,12 +196,12 @@ def create_ppo_agent(
     if tensorboard_log is None:
         tensorboard_log = str(get_logs_path())
     
-    # Create agent with MAXIMUM network architecture for 95% GPU utilization
+    # Create agent with OPTIMIZED network architecture for RTX 4090 (24GB VRAM)
     # Larger network uses more GPU memory and can learn more complex patterns
-    # [1024, 512] = 2 hidden layers: 1024 units (shared) + 512 units (value/policy split)
-    # This will use ~12-14GB GPU memory for ~95% utilization
+    # [1536, 768] = 2 hidden layers: 1536 units (shared) + 768 units (value/policy split)
+    # This will use ~18-20GB GPU memory for ~90-95% utilization on RTX 4090
     policy_kwargs = {
-        'net_arch': [1024, 512]  # MAXIMUM network for 95% GPU utilization
+        'net_arch': [1536, 768]  # OPTIMIZED for RTX 4090 (24GB VRAM)
     }
     
     # Create agent
