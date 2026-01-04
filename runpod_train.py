@@ -370,10 +370,10 @@ else:
             print("\n⚠ No models were trained. Check dataset name and paths.")
             
     except Exception as e:
-    print(f"\n❌ ERROR during training: {e}")
-    import traceback
-    traceback.print_exc()
-    raise
+        print(f"\n❌ ERROR during training: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 # ============================================
 # STEP 6: Validate Models Before PPO Training
