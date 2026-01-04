@@ -180,7 +180,8 @@ def preflight_validation(
     
     # Dependencies
     logger.info("Checking dependencies...")
-    required_packages = ['tensorflow', 'torch', 'stable_baselines3', 'pandas', 'numpy']
+    # TensorFlow removed - using PyTorch for all models (see requirements.txt)
+    required_packages = ['torch', 'stable_baselines3', 'pandas', 'numpy']
     missing = []
     for pkg in required_packages:
         try:
