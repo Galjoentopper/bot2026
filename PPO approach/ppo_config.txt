@@ -43,22 +43,22 @@ vf_coef = 0.5
 max_grad_norm = 0.5
 
 [REWARD]
-# Scale factor for profit
-profit_scale = 100
+# Scale factor for profit (reduced from 100 to prevent excessive clipping)
+profit_scale = 50
 # Transaction cost penalty scale
 cost_scale = 1.0
-# Drawdown penalty weight
-drawdown_penalty = 0.1
+# Drawdown penalty weight (reduced from 0.1 to be less aggressive)
+drawdown_penalty = 0.05
 # Max drawdown threshold before increased penalty
 max_drawdown_threshold = 0.1
-# Sharpe ratio bonus weight
-sharpe_bonus = 0.5
+# Sharpe ratio bonus weight (increased from 0.5 to encourage better risk-adjusted returns)
+sharpe_bonus = 1.5
 # Minimum periods for Sharpe calculation
 min_periods_for_sharpe = 10
-# Enable hold penalty (discourage excessive holding)
-enable_hold_penalty = false
-# Hold penalty weight (if enabled)
-hold_penalty = 0.01
+# Enable hold penalty (discourage excessive holding) - now enabled
+enable_hold_penalty = true
+# Hold penalty weight (if enabled) - reduced from 0.01
+hold_penalty = 0.005
 # Max hold periods before penalty kicks in
 max_hold_periods = 100
 # Invalid action penalty

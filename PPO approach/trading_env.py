@@ -503,6 +503,7 @@ class TradingEnv(gym.Env):
             current_equity=current_equity,
             holding_time=self.portfolio.holding_time,
             position_changed=position_changed,
+            log_components=True,  # Enable diagnostic logging
         )
         
         # Advance step

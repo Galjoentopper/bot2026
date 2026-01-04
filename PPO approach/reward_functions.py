@@ -66,12 +66,51 @@ class RewardCalculator:
         self.returns_history: List[float] = []
         self.equity_history: List[float] = []
         self.peak_equity: float = 0.0
+        self.last_reward_components: Dict[str, float] = {}
+        self.reward_history: List[float] = []
+        self.component_history: List[Dict[str, float]] = []
     
     def reset(self, initial_equity: float = 10000.0):
         """Reset state for new episode."""
         self.returns_history = []
         self.equity_history = [initial_equity]
         self.peak_equity = initial_equity
+        self.reward_history = []
+        self.component_history = []
+        self.last_reward_components = {}
+    
+    def get_reward_statistics(self) -> Dict[str, float]:
+        """
+        Get statistics about reward distribution and components.
+        
+        Returns:
+            Dictionary with reward statistics
+        """
+        if not self.reward_history:
+            return {}
+        
+        rewards = np.array(self.reward_history)
+        stats = {
+            'mean': float(np.mean(rewards)),
+            'std': float(np.std(rewards)),
+            'min': float(np.min(rewards)),
+            'max': float(np.max(rewards)),
+            'median': float(np.median(rewards)),
+        }
+        
+        # Component statistics if available
+        if self.component_history:
+            components = {}
+            for comp_name in ['profit', 'cost', 'drawdown', 'sharpe', 'hold']:
+                if self.component_history and comp_name in self.component_history[0]:
+                    comp_values = [c.get(comp_name, 0) for c in self.component_history]
+                    if comp_values:
+                        components[f'{comp_name}_mean'] = float(np.mean(comp_values))
+                        components[f'{comp_name}_std'] = float(np.std(comp_values))
+            if components:
+                stats['components'] = components
+        
+        return stats
     
     def calculate_reward(
         self,
@@ -81,6 +120,7 @@ class RewardCalculator:
         holding_time: int,
         action_valid: bool = True,
         position_changed: bool = False,
+        log_components: bool = False,
     ) -> float:
         """
         Calculate reward for current step.
@@ -92,45 +132,68 @@ class RewardCalculator:
             holding_time: How long current position has been held
             action_valid: Whether the action was valid
             position_changed: Whether position was opened/closed
+            log_components: Whether to log reward components for diagnostics
             
         Returns:
             Calculated reward
         """
         reward = 0.0
+        components = {}
         
         # Invalid action penalty
         if not action_valid:
+            if log_components:
+                components['invalid_action'] = self.config.invalid_action_penalty
             return self.config.invalid_action_penalty
         
         # 1. Profit reward
         profit_reward = profit_pct * self.config.profit_scale
         reward += profit_reward
+        components['profit'] = profit_reward
         
         # 2. Transaction cost penalty
         if position_changed:
             cost_penalty = transaction_cost * self.config.cost_scale
             reward -= cost_penalty
+            components['cost'] = -cost_penalty
+        else:
+            components['cost'] = 0.0
         
         # 3. Drawdown penalty
         drawdown_penalty = self._calculate_drawdown_penalty(current_equity)
         reward -= drawdown_penalty
+        components['drawdown'] = -drawdown_penalty
         
         # 4. Sharpe component (if enough history)
+        sharpe_bonus = 0.0
         if len(self.returns_history) >= self.config.min_periods_for_sharpe:
             sharpe_bonus = self._calculate_sharpe_bonus()
             reward += sharpe_bonus
+        components['sharpe'] = sharpe_bonus
         
         # 5. Hold penalty (optional)
+        hold_penalty = 0.0
         if self.config.enable_hold_penalty and holding_time > 0:
             hold_penalty = self._calculate_hold_penalty(holding_time)
             reward -= hold_penalty
+        components['hold'] = -hold_penalty
         
         # Update history
         self._update_history(profit_pct, current_equity)
         
         # Clip reward if configured
+        original_reward = reward
         if self.config.clip_reward:
             reward = np.clip(reward, -self.config.reward_clip_value, self.config.reward_clip_value)
+            if reward != original_reward:
+                components['clipped'] = reward - original_reward
+        
+        components['total'] = reward
+        
+        # Store components for diagnostics
+        if log_components:
+            self.last_reward_components = components
+            self.reward_history.append(reward)
         
         return reward
     
@@ -179,6 +242,10 @@ class RewardCalculator:
         """Update internal history."""
         self.returns_history.append(profit_pct)
         self.equity_history.append(current_equity)
+        
+        # Store reward components for diagnostics (if available)
+        if hasattr(self, 'last_reward_components') and self.last_reward_components:
+            self.component_history.append(self.last_reward_components.copy())
         
         # Keep history bounded
         max_history = 1000

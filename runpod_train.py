@@ -279,6 +279,201 @@ print("=" * 60)
 
 from train_models import train_all_models, load_config
 
+def select_best_ensemble(dataset_name: str, results_dir: Path, n_models: int = 2) -> list:
+    """
+    Automatically select best ensemble models based on performance metrics.
+    
+    Prioritizes:
+    1. High validation accuracy
+    2. Low overfitting (< 10% gap preferred)
+    3. Good convergence status
+    
+    Args:
+        dataset_name: Dataset identifier
+        results_dir: Path to results directory containing history files
+        n_models: Number of models to select (default: 2)
+        
+    Returns:
+        List of selected model names (e.g., ['dlstm', 'bilstm'])
+    """
+    try:
+        # Find all history files for this dataset
+        history_files = list(results_dir.glob(f'history_*_{dataset_name}_classification.json'))
+        
+        if not history_files:
+            print(f"  No history files found for {dataset_name}")
+            return None
+        
+        model_metrics = []
+        
+        for history_file in history_files:
+            try:
+                with open(history_file, 'r') as f:
+                    history = json.load(f)
+                
+                # Extract model name from filename
+                model_name = history_file.stem.replace('history_', '').replace('_classification', '').split('_')[0].lower()
+                
+                # Calculate metrics
+                final_val_acc = history['val_accuracy'][-1] if history['val_accuracy'] else 0
+                best_val_acc = max(history['val_accuracy']) if history['val_accuracy'] else 0
+                final_train_acc = history['accuracy'][-1] if history['accuracy'] else 0
+                overfitting = final_train_acc - final_val_acc
+                
+                # Calculate score: validation accuracy with overfitting penalty
+                # Penalize overfitting more if gap > 10%
+                if overfitting > 10:
+                    overfitting_penalty = 0.5  # Heavy penalty
+                elif overfitting > 5:
+                    overfitting_penalty = 0.2  # Moderate penalty
+                else:
+                    overfitting_penalty = 0.1  # Light penalty
+                
+                score = best_val_acc - (overfitting_penalty * overfitting)
+                
+                model_metrics.append({
+                    'model_name': model_name,
+                    'best_val_accuracy': best_val_acc,
+                    'final_val_accuracy': final_val_acc,
+                    'overfitting': overfitting,
+                    'score': score,
+                    'convergence': 'Good' if abs(final_train_acc - max(history['accuracy'])) < 2 else 'Needs more training'
+                })
+                
+            except Exception as e:
+                print(f"  Warning: Could not analyze {history_file.name}: {e}")
+                continue
+        
+        if not model_metrics:
+            return None
+        
+        # Sort by score (best first)
+        model_metrics.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Select top n_models
+        selected = [m['model_name'] for m in model_metrics[:n_models]]
+        
+        # Print selection reasoning
+        print(f"\n  Ensemble Selection Analysis:")
+        print(f"  {'Model':<10} {'Val Acc':<12} {'Overfit':<12} {'Score':<12}")
+        print(f"  {'-'*50}")
+        for m in model_metrics:
+            marker = "✓" if m['model_name'] in selected else " "
+            print(f"  {marker} {m['model_name']:<8} {m['best_val_accuracy']:>6.2f}%     {m['overfitting']:>6.2f}%     {m['score']:>6.2f}")
+        
+        return selected
+        
+    except Exception as e:
+        print(f"  Error in ensemble selection: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def check_and_retrain_bilstm(dataset_name: str, project_path: Path, config) -> bool:
+    """
+    Check if BiLSTM needs retraining and retrain if necessary.
+    
+    Detection criteria:
+    - Final validation accuracy < 50%
+    - Training collapsed (accuracy dropped significantly)
+    - Best validation accuracy achieved early but not maintained
+    
+    Args:
+        dataset_name: Dataset identifier
+        project_path: Project root path
+        config: Training configuration
+        
+    Returns:
+        True if retraining was performed, False otherwise
+    """
+    try:
+        results_dir = project_path / 'results'
+        history_file = results_dir / f'history_bilstm_{dataset_name}_classification.json'
+        
+        if not history_file.exists():
+            print("  BiLSTM history file not found, skipping retrain check")
+            return False
+        
+        with open(history_file, 'r') as f:
+            history = json.load(f)
+        
+        final_val_acc = history['val_accuracy'][-1] if history['val_accuracy'] else 0
+        best_val_acc = max(history['val_accuracy']) if history['val_accuracy'] else 0
+        final_train_acc = history['accuracy'][-1] if history['accuracy'] else 0
+        epochs = len(history['accuracy'])
+        
+        # Check if retraining is needed
+        needs_retrain = False
+        reason = ""
+        
+        if final_val_acc < 50:
+            needs_retrain = True
+            reason = f"Low validation accuracy ({final_val_acc:.2f}% < 50%)"
+        elif epochs < 30 and best_val_acc < 60:
+            needs_retrain = True
+            reason = f"Under-trained ({epochs} epochs, best: {best_val_acc:.2f}%)"
+        elif final_train_acc < 30:  # Training collapsed
+            needs_retrain = True
+            reason = f"Training collapsed (final train acc: {final_train_acc:.2f}%)"
+        
+        if not needs_retrain:
+            print(f"  BiLSTM performance acceptable (val acc: {final_val_acc:.2f}%, epochs: {epochs})")
+            return False
+        
+        print(f"\n  ⚠ BiLSTM needs retraining: {reason}")
+        print(f"  Current: {epochs} epochs, Val Acc: {final_val_acc:.2f}%, Best: {best_val_acc:.2f}%")
+        print(f"  Retraining with 40-50 epochs and increased patience...")
+        
+        # Load dataset
+        from train_models import load_dataset, train_single_model
+        datasets_path = project_path / 'datasets'
+        dataset_file = datasets_path / f"{dataset_name}.csv"
+        
+        if not dataset_file.exists():
+            matches = list(datasets_path.glob(f"*{dataset_name}*.csv"))
+            if matches:
+                dataset_file = matches[0]
+            else:
+                print(f"  Error: Dataset file not found for {dataset_name}")
+                return False
+        
+        df = load_dataset(str(dataset_file))
+        
+        # Temporarily modify config for retraining
+        import copy
+        from configparser import ConfigParser
+        retrain_config = copy.deepcopy(config) if config else load_config(str(project_path / 'training_config.txt'))
+        
+        if isinstance(retrain_config, ConfigParser):
+            # Increase epochs and patience
+            retrain_config.set('TRAINING', 'epochs', '50')
+            retrain_config.set('TRAINING', 'early_stopping_patience', '20')
+        
+        # Retrain BiLSTM
+        print(f"  Starting BiLSTM retraining...")
+        result = train_single_model(
+            model_name='bilstm',
+            dataset_name=dataset_name,
+            df=df,
+            config=retrain_config,
+            task='classification',
+            output_dir=str(project_path)
+        )
+        
+        if result and result.get('metrics'):
+            new_val_acc = result['metrics'].get('val_accuracy', 0)
+            print(f"  ✓ Retraining complete! New validation accuracy: {new_val_acc:.2f}%")
+            return True
+        else:
+            print(f"  ⚠ Retraining may have failed, check logs")
+            return False
+            
+    except Exception as e:
+        print(f"  Error in BiLSTM retrain check: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 # Load configuration
 config_path = PROJECT_PATH / 'training_config.txt'
 if config_path.exists():
@@ -393,6 +588,27 @@ if all_models_exist:
     for model_name, model_path in model_files.items():
         print(f"  ✓ {model_name.upper()}: {model_path.name}")
     results = []  # Empty results, models already exist
+    
+    # Still run ensemble selection even if models already exist
+    print("\n" + "=" * 60)
+    print("STEP 5.5: Automatic Ensemble Selection")
+    print("=" * 60)
+    try:
+        selected_ensemble = select_best_ensemble(DATASET_NAME, PROJECT_PATH / 'results', n_models=2)
+        if selected_ensemble:
+            print(f"\n✓ Selected ensemble: {', '.join([m.upper() for m in selected_ensemble])}")
+            # Update required_models for PPO training
+            required_models = selected_ensemble
+            # Update PPO config if using ensemble mode
+            if ppo_config['models'].get('prediction_model') == 'ensemble':
+                ppo_config['models']['ensemble_models'] = selected_ensemble
+                print(f"  Updated PPO config ensemble_models to: {', '.join(selected_ensemble)}")
+        else:
+            print("⚠ Could not select ensemble automatically, using configured models")
+    except Exception as e:
+        print(f"⚠ Error in ensemble selection: {e}")
+        import traceback
+        traceback.print_exc()
 else:
     print(f"⚠ Some models missing. Training prediction models...")
     print("=" * 60)
@@ -418,6 +634,53 @@ else:
             print("\n" + "=" * 60)
             print("✓ All prediction models trained successfully!")
             print("=" * 60)
+            
+            # Automatic ensemble selection based on model performance
+            print("\n" + "=" * 60)
+            print("STEP 5.5: Automatic Ensemble Selection")
+            print("=" * 60)
+            try:
+                selected_ensemble = select_best_ensemble(DATASET_NAME, PROJECT_PATH / 'results', n_models=2)
+                if selected_ensemble:
+                    print(f"\n✓ Selected ensemble: {', '.join([m.upper() for m in selected_ensemble])}")
+                    # Update required_models for PPO training
+                    required_models = selected_ensemble
+                    # Update PPO config if using ensemble mode
+                    if ppo_config['models'].get('prediction_model') == 'ensemble':
+                        ppo_config['models']['ensemble_models'] = selected_ensemble
+                        print(f"  Updated PPO config ensemble_models to: {', '.join(selected_ensemble)}")
+                else:
+                    print("⚠ Could not select ensemble automatically, using configured models")
+            except Exception as e:
+                print(f"⚠ Error in ensemble selection: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Check if BiLSTM needs retraining
+            print("\n" + "=" * 60)
+            print("STEP 5.6: Checking for Underperforming Models")
+            print("=" * 60)
+            try:
+                bilstm_needs_retrain = check_and_retrain_bilstm(DATASET_NAME, PROJECT_PATH, config)
+                if bilstm_needs_retrain:
+                    print("✓ BiLSTM retraining completed")
+            except Exception as e:
+                print(f"⚠ Error checking BiLSTM: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Check if BiLSTM needs retraining
+            print("\n" + "=" * 60)
+            print("STEP 5.6: Checking for Underperforming Models")
+            print("=" * 60)
+            try:
+                bilstm_needs_retrain = check_and_retrain_bilstm(DATASET_NAME, PROJECT_PATH, config)
+                if bilstm_needs_retrain:
+                    print("✓ BiLSTM retraining completed")
+            except Exception as e:
+                print(f"⚠ Error checking BiLSTM: {e}")
+                import traceback
+                traceback.print_exc()
             
             # Print summary
             print("\nTraining Summary:")
@@ -578,6 +841,41 @@ try:
         if checkpoint_path.exists():
             checkpoints = list(checkpoint_path.glob("*.zip"))
             print(f"Checkpoints available: {len(checkpoints)}")
+        
+        # Run backtesting on the trained model
+        print("\n" + "=" * 60)
+        print("STEP 7.5: Running Backtesting on Trained PPO Agent")
+        print("=" * 60)
+        try:
+            # Add PPO approach to path for import
+            import sys
+            ppo_approach_path = get_ppo_path()
+            if str(ppo_approach_path) not in sys.path:
+                sys.path.insert(0, str(ppo_approach_path))
+            from backtest_ppo import backtest_ppo_agent
+            final_model_path = get_ppo_models_path() / f"ppo_{ppo_config['models']['prediction_model']}_{DATASET_NAME}.zip"
+            if final_model_path.exists():
+                print(f"\nBacktesting model: {final_model_path.name}")
+                backtest_results = backtest_ppo_agent(
+                    model_path=str(final_model_path),
+                    dataset_name=DATASET_NAME,
+                    n_episodes=10,
+                    deterministic=True,
+                    save_results=True
+                )
+                if backtest_results:
+                    print("\n✓ Backtesting completed successfully!")
+                else:
+                    print("\n⚠ Backtesting completed with warnings")
+            else:
+                print(f"⚠ Model file not found for backtesting: {final_model_path}")
+        except ImportError:
+            print("⚠ backtest_ppo.py not found - skipping backtesting")
+        except Exception as e:
+            print(f"⚠ Error during backtesting: {e}")
+            import traceback
+            traceback.print_exc()
+            # Don't fail the pipeline if backtesting fails
     else:
         print("\n⚠ PPO training returned None - check for errors above")
         
@@ -601,12 +899,12 @@ print(f"  Results: {PROJECT_PATH / 'results'}")
 print("\n" + "=" * 60)
 
 # ============================================
-# STEP 8: Push Models to GitHub (Optional)
+# STEP 9: Push Models to GitHub (Optional)
 # ============================================
 push_to_github = os.environ.get('RUNPOD_PUSH_TO_GITHUB', 'false').lower() == 'true'
 if push_to_github:
     print("\n" + "=" * 60)
-    print("STEP 8: Pushing models to GitHub...")
+    print("STEP 9: Pushing models to GitHub...")
     print("=" * 60)
     
     try:
@@ -715,4 +1013,12 @@ if push_to_github:
         print(f"⚠ Error pushing to GitHub: {e}")
 else:
     print("\n⚠ GitHub push disabled (set RUNPOD_PUSH_TO_GITHUB=true to enable)")
+
+# ============================================
+# Pipeline completed successfully - explicit exit
+# ============================================
+print("\n" + "=" * 60)
+print("Pipeline completed successfully. Exiting...")
+print("=" * 60)
+sys.exit(0)
 
