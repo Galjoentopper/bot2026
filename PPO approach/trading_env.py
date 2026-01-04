@@ -120,7 +120,10 @@ class TradingEnv(gym.Env):
         # Episode state
         self.current_step = 0
         self.episode_start_idx = 0
+        self.previous_equity = initial_capital  # Track previous equity for reward calculation
         self.done = False
+        self.episode_reward = 0.0  # Track cumulative episode reward
+        self.episode_length = 0  # Track episode length
         
         # Define action and observation spaces
         self.action_space = spaces.Discrete(9)
@@ -473,6 +476,9 @@ class TradingEnv(gym.Env):
         # Reset episode state
         self.current_step = 0
         self.done = False
+        self.previous_equity = self.initial_capital  # Reset previous equity tracking
+        self.episode_reward = 0.0  # Reset episode reward tracking
+        self.episode_length = 0  # Reset episode length tracking
         
         # Determine episode start (can randomize for training)
         if self.train_mode and self.np_random is not None:
@@ -514,6 +520,25 @@ class TradingEnv(gym.Env):
         
         # Calculate reward
         current_equity = self.portfolio.state.total_equity
+        
+        # If position changed, account for immediate equity change (transaction costs, position value)
+        if position_changed:
+            # Account for immediate equity change (transaction costs, position value)
+            equity_change = current_equity - self.previous_equity
+            if abs(equity_change) > 1e-6:  # Only if significant change
+                profit_pct = equity_change / self.initial_capital if self.initial_capital > 0 else 0
+        # If holding and no position change, include unrealized P&L in profit_pct
+        # This ensures the agent gets rewarded for holding profitable positions
+        elif not position_changed:
+            if self.portfolio.state.position != 0:
+                # Holding with a position: reward based on unrealized P&L change
+                equity_change = current_equity - self.previous_equity
+                profit_pct = equity_change / self.initial_capital if self.initial_capital > 0 else 0
+            else:
+                # Holding with no position: still track equity changes (should be 0, but allows for future features)
+                # For now, profit_pct stays 0 when holding with no position
+                profit_pct = 0.0
+        
         reward = self.reward_calculator.calculate_reward(
             profit_pct=profit_pct,
             transaction_cost=transaction_cost,
@@ -522,6 +547,11 @@ class TradingEnv(gym.Env):
             position_changed=position_changed,
             log_components=True,  # Enable diagnostic logging
         )
+        
+        # Update previous equity for next step (after reward calculation)
+        # This ensures equity tracking is correct for next step's reward calculation
+        assert current_equity >= 0, f"Equity cannot be negative: {current_equity}"
+        self.previous_equity = current_equity
         
         # Advance step
         self.current_step += 1
@@ -548,6 +578,10 @@ class TradingEnv(gym.Env):
         # Get observation
         observation = self._get_observation()
         
+        # Update episode tracking (after all reward modifications)
+        self.episode_reward += reward
+        self.episode_length += 1
+        
         # Build info dict
         info = {
             'step': self.current_step,
@@ -559,6 +593,13 @@ class TradingEnv(gym.Env):
             'profit_pct': profit_pct,
             'action': action,
         }
+        
+        # Add episode info when episode ends (for stable-baselines3 EvalCallback)
+        if terminated or truncated:
+            info['episode'] = {
+                'r': self.episode_reward,
+                'l': self.episode_length,
+            }
         
         return observation, reward, terminated, truncated, info
     
@@ -590,6 +631,26 @@ class TradingEnv(gym.Env):
     def get_episode_metrics(self) -> Dict:
         """Get performance metrics for current episode."""
         return self.portfolio.get_metrics()
+    
+    def get_reward_breakdown(self) -> Dict:
+        """
+        Get detailed reward breakdown for debugging.
+        
+        Returns:
+            Dictionary with reward components and statistics
+        """
+        if hasattr(self.reward_calculator, 'last_reward_components'):
+            return self.reward_calculator.last_reward_components.copy()
+        return {}
+    
+    def get_reward_statistics(self) -> Dict:
+        """
+        Get reward statistics for current episode.
+        
+        Returns:
+            Dictionary with reward statistics
+        """
+        return self.reward_calculator.get_reward_statistics()
 
 
 def create_trading_env(

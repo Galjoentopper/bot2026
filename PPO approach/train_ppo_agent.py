@@ -194,6 +194,32 @@ def train_ppo(
     # Load configuration
     config = load_config(config_path)
     
+    # Pre-training verification: Test reward calculation
+    print("\n" + "=" * 60)
+    print("PRE-TRAINING VERIFICATION")
+    print("=" * 60)
+    try:
+        from test_reward_calculation import test_reward_scenarios
+        print("Running reward calculation tests...")
+        test_passed = test_reward_scenarios()
+        if not test_passed:
+            print("\n⚠ WARNING: Some reward calculation tests failed!")
+            print("Training will continue, but rewards may not work correctly.")
+            response = input("Continue with training anyway? (y/n): ").strip().lower()
+            if response != 'y':
+                print("Training aborted by user.")
+                return None
+        else:
+            print("\n✓ Reward calculation tests passed. Proceeding with training...")
+    except ImportError as e:
+        print(f"⚠ WARNING: Could not import test script: {e}")
+        print("Skipping pre-training verification.")
+    except Exception as e:
+        print(f"⚠ WARNING: Error during verification: {e}")
+        print("Skipping pre-training verification.")
+    
+    print("\n" + "=" * 60)
+    
     # Override with command line arguments
     if model_type:
         config['models']['prediction_model'] = model_type
