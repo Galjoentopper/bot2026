@@ -1,0 +1,74 @@
+[DATA]
+# Sequence length (lookback window)
+sequence_length = 60
+# Prediction horizon (steps ahead)
+prediction_horizon = 1
+# Base features from CSV
+features = open,high,low,close,volume
+# Target column for prediction
+target = close
+# Train/test split ratio (chronological)
+train_test_split = 0.8
+# Whether to add technical indicators (RSI, MACD, Bollinger Bands, etc.)
+use_technical_indicators = true
+
+[MODEL]
+# Hidden units per layer - WILL BE REPLACED DURING TUNING
+units = PLACEHOLDER_UNITS
+# Number of recurrent layers - WILL BE REPLACED DURING TUNING
+layers = PLACEHOLDER_LAYERS
+# Dropout rate for regularization - WILL BE REPLACED DURING TUNING
+dropout = PLACEHOLDER_DROPOUT
+# Learning rate - WILL BE REPLACED DURING TUNING
+learning_rate = PLACEHOLDER_LEARNING_RATE
+# Optimizer
+optimizer = adam
+
+[TRAINING]
+# Batch size - WILL BE REPLACED DURING TUNING
+batch_size = PLACEHOLDER_BATCH_SIZE
+# Maximum epochs
+epochs = 150
+# Early stopping patience
+early_stopping_patience = 15
+# Validation split from training data
+validation_split = 0.1
+# Use class weights for imbalanced classification
+use_class_weights = true
+
+[CLASSIFICATION]
+# Smoothing window k
+smoothing_k = 30
+# Delta threshold: 'auto' calculates based on volatility
+threshold_delta = auto
+# Enable classification task
+enable_classification = true
+
+[DLSTM]
+# Moving average window for trend decomposition
+moving_average_window = 10
+# Trend branch units
+trend_units = 64
+# Remainder branch units
+remainder_units = 64
+
+[ENSEMBLE]
+# Enable ensemble training
+enable_ensemble = false
+# Models to include in ensemble
+models = lstm,gru,bilstm,dlstm
+# Voting method: soft or hard
+voting = soft
+
+[OUTPUT]
+# Directory for saved models
+models_dir = models
+# Directory for scalers
+scalers_dir = scalers
+# Directory for results (plots, metrics, etc.)
+results_dir = results
+# Save training history
+save_history = true
+# Generate training plots
+generate_plots = true
+

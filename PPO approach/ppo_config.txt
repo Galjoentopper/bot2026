@@ -90,14 +90,16 @@ device = cuda
 
 [MODELS]
 # Prediction model to use: lstm, gru, bilstm, dlstm, ensemble
-# Changed from ensemble to dlstm for 4x faster environment steps
-# Ensemble (4 models) is slower but more accurate
-# Single model (dlstm) is faster and still effective for PPO training
-prediction_model = dlstm
+# Using ensemble with top 2 models (DLSTM + BiLSTM) for best accuracy
+# Expected accuracy: 72-75% (vs 70.93% single DLSTM)
+# Ensemble is slightly slower but significantly more accurate
+prediction_model = ensemble
 # Dataset name (without path)
 dataset = ETH-EUR_1H_20240101-20251231
-# Models to include in ensemble (comma-separated) - not used when prediction_model != ensemble
-ensemble_models = lstm,gru,bilstm,dlstm
+# Models to include in ensemble (comma-separated)
+# Using top 2 models from analysis: DLSTM (70.93%) + BiLSTM (63.38%)
+# This combination provides best accuracy while maintaining reasonable speed
+ensemble_models = dlstm,bilstm
 # Prediction horizons for multi-step ahead predictions (comma-separated)
 # Reduced from 1,2,3,5,10 to 1,2,3 for faster environment steps
 # Removed medium-term horizons (5,10) to reduce observation space and computation

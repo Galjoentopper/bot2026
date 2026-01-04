@@ -303,24 +303,80 @@ else:
         print("⚠ Config file not found, using defaults")
         config = None
 
-# Check if all models already exist
+# Load PPO configuration early to determine which models to train
+ppo_path = get_ppo_path()
+ppo_config_path = ppo_path / 'ppo_config.txt'
+
+if not ppo_config_path.exists():
+    print("⚠ PPO config file not found, using defaults")
+    from train_ppo_agent import load_config
+    ppo_config = load_config(None)
+else:
+    from train_ppo_agent import load_config
+    ppo_config = load_config(str(ppo_config_path))
+
+# Determine which models to train based on PPO config
+# If using ensemble, only train ensemble models
+if ppo_config['models'].get('prediction_model') == 'ensemble':
+    ensemble_models_str = ppo_config['models'].get('ensemble_models', 'dlstm,bilstm')
+    required_models = [m.strip() for m in ensemble_models_str.split(',')]
+    print(f"\n📦 Using ensemble mode - will only train: {', '.join(required_models).upper()}")
+else:
+    # Single model mode - train all 4 models (for flexibility)
+    required_models = ['lstm', 'gru', 'bilstm', 'dlstm']
+    print(f"\n📦 Using single model mode - will train all models for flexibility")
+
+# Check if all required models already exist
 models_dir = PROJECT_PATH / 'models'
-required_models = ['lstm', 'gru', 'bilstm', 'dlstm']
 model_files = {}
 all_models_exist = True
 
+# Try to use version manager for model checking
+try:
+    from model_versioning import get_version_manager
+    version_manager = get_version_manager(models_dir / 'manifest.json')
+    # Initialize manifest from existing models if needed
+    if not (models_dir / 'manifest.json').exists():
+        version_manager.initialize_from_existing_models()
+    use_versioning = True
+except ImportError:
+    use_versioning = False
+    version_manager = None
+
 for model_name in required_models:
-    model_pattern = f"{model_name}_{DATASET_NAME}_classification.pth"
-    model_path = models_dir / model_pattern
+    model_path = None
     
-    if not model_path.exists():
-        # Try partial match
-        matching = list(models_dir.glob(f"{model_name}*{DATASET_NAME}*.pth"))
+    # Try version manager first
+    if use_versioning and version_manager:
+        try:
+            model_path = version_manager.get_model_file(
+                model_name,
+                DATASET_NAME,
+                version=None,  # Latest version
+                task='classification'
+            )
+        except Exception as e:
+            pass  # Fall back to old method
+    
+    # Fallback to old pattern matching
+    if model_path is None or not model_path.exists():
+        # Try versioned pattern first
+        matching = list(models_dir.glob(f"{model_name}_{DATASET_NAME}_v*_classification.pth"))
         if matching:
             model_path = matching[0]
         else:
-            all_models_exist = False
-            break
+            # Try old pattern (no version)
+            model_pattern = f"{model_name}_{DATASET_NAME}_classification.pth"
+            model_path = models_dir / model_pattern
+            
+            if not model_path.exists():
+                # Try partial match
+                matching = list(models_dir.glob(f"{model_name}*{DATASET_NAME}*.pth"))
+                if matching:
+                    model_path = matching[0]
+                else:
+                    all_models_exist = False
+                    break
     
     model_files[model_name] = model_path
 
@@ -387,10 +443,10 @@ import numpy as np
 # Import prediction wrapper
 from prediction_wrapper import PredictionModel, EnsemblePredictionModel
 
-# Test loading each individual model
+# Test loading each individual model (only test required models)
 print("\n1. Testing Individual Model Loading:")
 print("-" * 60)
-models_to_test = ['lstm', 'gru', 'bilstm', 'dlstm']
+models_to_test = required_models  # Only test models that were trained/required
 loaded_models = {}
 
 for model_name in models_to_test:
@@ -467,19 +523,9 @@ ppo_path = get_ppo_path()
 os.chdir(ppo_path)
 sys.path.insert(0, str(ppo_path))
 
-from train_ppo_agent import train_ppo, load_config
+from train_ppo_agent import train_ppo
 
-# Load PPO configuration
-ppo_config_path = ppo_path / 'ppo_config.txt'
-print(f"\nLoading PPO config from: {ppo_config_path}")
-
-if not ppo_config_path.exists():
-    print("⚠ PPO config file not found, using defaults")
-    ppo_config = load_config(None)
-else:
-    ppo_config = load_config(str(ppo_config_path))
-
-# Update dataset name in config if needed
+# Update dataset name in PPO config if needed (ppo_config already loaded above)
 if ppo_config['models']['dataset'] != DATASET_NAME:
     print(f"\n⚠ Updating dataset name in config: {ppo_config['models']['dataset']} -> {DATASET_NAME}")
     ppo_config['models']['dataset'] = DATASET_NAME

@@ -29,16 +29,18 @@ from pytorch_models import get_model as get_pytorch_model
 class PredictionModel:
     """Wrapper for a single prediction model."""
     
-    def __init__(self, model_name: str, dataset_name: str):
+    def __init__(self, model_name: str, dataset_name: str, version: Optional[str] = None):
         """
         Initialize prediction model wrapper.
         
         Args:
             model_name: Model type ('lstm', 'gru', 'bilstm', 'dlstm')
             dataset_name: Dataset identifier (e.g., 'ETH-EUR_1H_20240101-20251231')
+            version: Model version (e.g., 'v1.0.0'). If None, loads latest version.
         """
         self.model_name = model_name.lower()
         self.dataset_name = dataset_name
+        self.version = version
         self.model = None
         self.scaler_data = None
         self.feature_scaler = None
@@ -64,18 +66,55 @@ class PredictionModel:
             models_path = get_models_path()
             scalers_path = get_scalers_path()
             
-            # Find model file (PyTorch format)
-            model_pattern = f"{self.model_name}_{self.dataset_name}_classification.pth"
-            model_path = models_path / model_pattern
+            # Try to use version manager if available
+            model_path = None
+            try:
+                import sys
+                from pathlib import Path
+                # Add parent directory to path to import model_versioning
+                parent_dir = Path(__file__).parent.parent
+                if str(parent_dir) not in sys.path:
+                    sys.path.insert(0, str(parent_dir))
+                
+                from model_versioning import get_version_manager
+                version_manager = get_version_manager(models_path / 'manifest.json')
+                
+                # Get model file from version manager
+                model_path = version_manager.get_model_file(
+                    self.model_name,
+                    self.dataset_name,
+                    version=self.version,
+                    task='classification'
+                )
+                
+                if model_path:
+                    print(f"  Loading version: {self.version or 'latest'}")
+            except ImportError:
+                # Versioning not available, fall back to old method
+                pass
+            except Exception as e:
+                print(f"  Warning: Version manager error: {e}, using fallback")
             
-            if not model_path.exists():
-                # Try to find with partial match
-                matching = list(models_path.glob(f"{self.model_name}*{self.dataset_name}*.pth"))
-                if matching:
-                    model_path = matching[0]
-                else:
-                    print(f"Model not found: {model_pattern}")
-                    return False
+            # Fallback to old naming if version manager didn't find it
+            if model_path is None or not model_path.exists():
+                # Find model file (PyTorch format) - try versioned first, then old format
+                if self.version:
+                    model_pattern = f"{self.model_name}_{self.dataset_name}_{self.version}_classification.pth"
+                    model_path = models_path / model_pattern
+                
+                if model_path is None or not model_path.exists():
+                    # Try old format (no version)
+                    model_pattern = f"{self.model_name}_{self.dataset_name}_classification.pth"
+                    model_path = models_path / model_pattern
+                
+                if not model_path.exists():
+                    # Try to find with partial match
+                    matching = list(models_path.glob(f"{self.model_name}*{self.dataset_name}*.pth"))
+                    if matching:
+                        model_path = matching[0]
+                    else:
+                        print(f"Model not found: {model_pattern}")
+                        return False
             
             # Load scaler first to get model architecture info
             scaler_pattern = f"scaler_{self.dataset_name}.pkl"

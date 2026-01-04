@@ -72,6 +72,14 @@ from sklearn.utils.class_weight import compute_class_weight
 
 import pickle
 
+# Import model versioning
+try:
+    from model_versioning import get_version_manager
+    VERSIONING_AVAILABLE = True
+except ImportError:
+    VERSIONING_AVAILABLE = False
+    print("Warning: model_versioning not available, models will not be versioned")
+
 
 # ============================================================================
 # Configuration Loading
@@ -887,8 +895,23 @@ def train_single_model(model_name: str, dataset_name: str, df: pd.DataFrame,
     for d in [models_dir, scalers_dir, results_dir]:
         os.makedirs(d, exist_ok=True)
     
-    # Model path (PyTorch format)
-    model_filename = f"{model_name}_{dataset_name}_{task}.pth"
+    # Get version for this model
+    version = None
+    if VERSIONING_AVAILABLE:
+        try:
+            version_manager = get_version_manager(Path(models_dir) / 'manifest.json')
+            # Get next version (minor increment for new training)
+            version = version_manager.get_next_version(model_name, dataset_name, version_type='minor')
+            print(f"  Model version: {version}")
+        except Exception as e:
+            print(f"  Warning: Could not get version: {e}")
+            version = None
+    
+    # Model path (PyTorch format) - include version if available
+    if version:
+        model_filename = f"{model_name}_{dataset_name}_{version}_{task}.pth"
+    else:
+        model_filename = f"{model_name}_{dataset_name}_{task}.pth"
     model_path = os.path.join(models_dir, model_filename)
     
     # Train model
@@ -916,6 +939,41 @@ def train_single_model(model_name: str, dataset_name: str, df: pd.DataFrame,
     # Model is already saved during training (best model), but save final model too
     pytorch_save_model(model, model_path)
     print(f"\nModel saved to: {model_path}")
+    
+    # Register version in manifest
+    if VERSIONING_AVAILABLE and version:
+        try:
+            version_manager = get_version_manager(Path(models_dir) / 'manifest.json')
+            
+            # Extract hyperparameters from config
+            hyperparameters = {
+                'units': config.getint('MODEL', 'units'),
+                'layers': config.getint('MODEL', 'layers'),
+                'dropout': config.getfloat('MODEL', 'dropout'),
+                'learning_rate': config.getfloat('MODEL', 'learning_rate'),
+                'batch_size': config.getint('TRAINING', 'batch_size'),
+                'epochs': config.getint('TRAINING', 'epochs'),
+                'sequence_length': config.getint('DATA', 'sequence_length'),
+            }
+            
+            # Get accuracy from metrics
+            accuracy = metrics.get('accuracy') or metrics.get('val_accuracy')
+            if accuracy is None and 'accuracy' in metrics:
+                accuracy = metrics['accuracy']
+            
+            # Register version
+            version_manager.register_version(
+                model_name=model_name,
+                dataset_name=dataset_name,
+                version=version,
+                model_file=model_filename,
+                accuracy=accuracy,
+                hyperparameters=hyperparameters,
+                metrics=metrics
+            )
+            print(f"  ✓ Registered version {version} in manifest")
+        except Exception as e:
+            print(f"  Warning: Could not register version: {e}")
     
     # Save scalers and metadata
     scaler_path = os.path.join(scalers_dir, f"scaler_{dataset_name}.pkl")
