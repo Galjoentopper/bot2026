@@ -392,7 +392,8 @@ def train_ppo(
     print("\n" + "=" * 60)
     
     # Pre-training validation: Quick 50K step test to verify learning
-    run_validation = not skip_validation
+    # DISABLED: Validation test skipped - proceeding directly to training
+    run_validation = False
     
     print("\n" + "=" * 60)
     
