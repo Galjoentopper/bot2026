@@ -103,7 +103,9 @@ def evaluate_ppo_agent(
         dataset_path=dataset_path,
         prediction_models=prediction_models if prediction_models.loaded else None,
         train_mode=False,  # Use test data
-        train_split=0.8,
+        validation_mode=False,  # Use test data (20%, models never saw this)
+        train_split=0.6,
+        validation_split=0.2,
     )
     
     print(f"\nRunning {n_episodes} evaluation episodes...")
@@ -342,6 +344,9 @@ def evaluate_random_agent(dataset_name: str, n_episodes: int = 5) -> Dict:
             dataset_path=dataset_files[0],
             prediction_models=None,
             train_mode=False,
+            validation_mode=False,  # Use test data
+            train_split=0.6,
+            validation_split=0.2,
             max_episode_steps=1000,
         )
         

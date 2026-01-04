@@ -156,8 +156,14 @@ class RewardCalculator:
             cost_penalty = transaction_cost * self.config.cost_scale
             reward -= cost_penalty
             components['cost'] = -cost_penalty
+            # Small positive reward for taking action (encourages trading activity)
+            # This helps prevent the agent from learning to only hold
+            action_bonus = 0.01  # Small bonus for executing a trade
+            reward += action_bonus
+            components['action_bonus'] = action_bonus
         else:
             components['cost'] = 0.0
+            components['action_bonus'] = 0.0
         
         # 3. Drawdown penalty
         drawdown_penalty = self._calculate_drawdown_penalty(current_equity)

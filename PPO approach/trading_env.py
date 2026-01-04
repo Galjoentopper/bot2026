@@ -52,7 +52,9 @@ class TradingEnv(gym.Env):
         initial_capital: float = 10000.0,
         sequence_length: int = 60,
         train_mode: bool = True,
-        train_split: float = 0.8,
+        train_split: float = 0.6,
+        validation_split: float = 0.2,
+        validation_mode: bool = False,
         reward_config: Dict = None,
         max_episode_steps: int = None,
         render_mode: str = None,
@@ -67,8 +69,11 @@ class TradingEnv(gym.Env):
             transaction_cost: Cost per trade (0.0025 = 0.25%)
             initial_capital: Starting capital
             sequence_length: Lookback window for sequences
-            train_mode: If True, use training data; if False, use test data
-            train_split: Fraction of data for training
+            train_mode: If True, use training data (60%); if False, use validation or test data
+            train_split: Fraction of data for training (default: 0.6 for 60/20/20 split)
+            validation_split: Fraction of data for validation (default: 0.2 for 60/20/20 split)
+            validation_mode: If True and train_mode=False, use validation data (20%);
+                           if False and train_mode=False, use test data (20%)
             reward_config: Configuration for reward calculation
             max_episode_steps: Maximum steps per episode (None = full dataset)
             render_mode: Render mode ('human' or 'ansi')
@@ -80,6 +85,8 @@ class TradingEnv(gym.Env):
         self.sequence_length = sequence_length
         self.train_mode = train_mode
         self.train_split = train_split
+        self.validation_split = validation_split
+        self.validation_mode = validation_mode
         self.max_episode_steps = max_episode_steps
         self.render_mode = render_mode
         
@@ -194,19 +201,29 @@ class TradingEnv(gym.Env):
         available_cols = [c for c in feature_cols if c in df.columns]
         self.features = df[available_cols].values
         
-        # Calculate train/test split indices
+        # Calculate three-way split indices (60/20/20: train/val/test)
         total_len = len(self.prices)
-        split_idx = int(total_len * self.train_split)
+        train_split_idx = int(total_len * self.train_split)  # 60%
+        val_split_idx = int(total_len * (self.train_split + self.validation_split))  # 80%
         
         if self.train_mode:
+            # Training data: first 60% (prediction models trained on this)
             self.data_start_idx = self.sequence_length
-            self.data_end_idx = split_idx
+            self.data_end_idx = train_split_idx
+            split_name = "Training"
+        elif self.validation_mode:
+            # Validation data: 60-80% (models never saw this)
+            self.data_start_idx = train_split_idx
+            self.data_end_idx = val_split_idx
+            split_name = "Validation"
         else:
-            self.data_start_idx = split_idx
+            # Test data: last 20% (models never saw this)
+            self.data_start_idx = val_split_idx
             self.data_end_idx = total_len
+            split_name = "Test"
         
         print(f"  Total samples: {total_len}")
-        print(f"  Using indices {self.data_start_idx} to {self.data_end_idx}")
+        print(f"  {split_name} data: Using indices {self.data_start_idx} to {self.data_end_idx}")
         print(f"  Available steps: {self.data_end_idx - self.data_start_idx}")
     
     def _add_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -608,10 +625,14 @@ def create_trading_env(
     if prediction_horizons is None:
         prediction_horizons = [1, 2, 3, 5, 10]
     
+    # Extract validation_mode from kwargs if present
+    validation_mode = kwargs.pop('validation_mode', False)
+    
     return TradingEnv(
         dataset_path=dataset_path,
         prediction_models=prediction_models,
         train_mode=train_mode,
+        validation_mode=validation_mode,
         prediction_horizons=prediction_horizons,
         **kwargs
     )

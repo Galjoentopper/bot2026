@@ -10,7 +10,12 @@ features = open,high,low,close,volume
 # Target column for prediction
 target = close
 # Train/test split ratio (chronological)
-train_test_split = 0.8
+# Updated to 0.6 for three-way split: 60% train / 20% validation / 20% test
+# This prevents data leakage where prediction models trained on 80% are used
+# to generate features for PPO training on the same 80% of data
+# With 60/20/20 split: prediction models train on 60%, PPO trains on 60%,
+# validates on 20%, and tests on 20% (models never see val/test data)
+train_test_split = 0.6
 # Whether to add technical indicators (RSI, MACD, Bollinger Bands, etc.)
 use_technical_indicators = true
 

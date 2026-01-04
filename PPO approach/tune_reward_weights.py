@@ -107,7 +107,9 @@ def test_reward_config(
                     initial_capital=config['environment']['initial_capital'],
                     sequence_length=config['environment']['sequence_length'],
                     train_mode=train_mode,
+                    validation_mode=False if train_mode else True,  # Use validation for eval during tuning
                     train_split=config['training']['train_test_split'],
+                    validation_split=config['training'].get('validation_split', 0.2),
                     reward_config=config['reward'],
                     max_episode_steps=config['training']['max_episode_steps'],
                     prediction_horizons=config['models'].get('prediction_horizons', [1, 2, 3]),

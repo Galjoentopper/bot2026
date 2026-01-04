@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import time
+import glob
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
 import pandas as pd
@@ -24,12 +25,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def load_config(config_path: str = "config.txt") -> Dict:
+def load_config(config_path: str = None) -> Dict:
     """
     Read and parse JSON config file with validation.
     
     Args:
-        config_path: Path to config file
+        config_path: Path to config file (if None, searches in script directory)
         
     Returns:
         Dictionary with configuration
@@ -38,8 +39,16 @@ def load_config(config_path: str = "config.txt") -> Dict:
         FileNotFoundError: If config file doesn't exist
         ValueError: If config is invalid
     """
+    if config_path is None:
+        # Try to find config.txt in the same directory as this script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(script_dir, "config.txt")
+        # If not found, try current directory
+        if not os.path.exists(config_path):
+            config_path = "config.txt"
+    
     if not os.path.exists(config_path):
-        raise FileNotFoundError(f"Config file not found: {config_path}")
+        raise FileNotFoundError(f"Config file not found: {config_path}. Tried: {os.path.abspath(config_path)}")
     
     with open(config_path, 'r') as f:
         config = json.load(f)
@@ -104,35 +113,83 @@ def get_csv_filename(coin: str, interval: str, start_date: str, end_date: str) -
     return f"{coin}_{interval_upper}_{start_str}-{end_str}.csv"
 
 
-def load_existing_data(csv_path: str) -> pd.DataFrame:
+def find_existing_file(datasets_folder: str, coin: str, interval: str) -> Optional[str]:
     """
-    Load existing CSV data and return as DataFrame.
+    Find existing CSV file for a coin/interval, even if date range differs.
     
     Args:
-        csv_path: Path to CSV file
-        
+        datasets_folder: Path to datasets folder
+        coin: Coin symbol
+        interval: Interval string
+    
+    Returns:
+        Path to existing file, or None if not found
+    """
+    interval_upper = interval.upper()
+    pattern = f"{coin}_{interval_upper}_*.csv"
+    
+    matches = glob.glob(os.path.join(datasets_folder, pattern))
+    
+    if matches:
+        # Return the most recent file (by modification time) or first match
+        matches.sort(key=os.path.getmtime, reverse=True)
+        return matches[0]
+    
+    return None
+
+
+def load_existing_data(csv_path: str, datasets_folder: str = None, coin: str = None, interval: str = None) -> pd.DataFrame:
+    """
+    Load existing CSV data and return as DataFrame.
+    Also checks for files with different date ranges in the filename.
+    
+    Args:
+        csv_path: Path to CSV file (preferred)
+        datasets_folder: Path to datasets folder (for searching)
+        coin: Coin symbol (for searching)
+        interval: Interval string (for searching)
+    
     Returns:
         DataFrame with existing data, or empty DataFrame if file doesn't exist
     """
-    if not os.path.exists(csv_path):
-        logger.info(f"CSV file does not exist: {csv_path}")
-        return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    # First try the exact path
+    if os.path.exists(csv_path):
+        try:
+            df = pd.read_csv(csv_path)
+            if 'timestamp' not in df.columns:
+                logger.warning(f"CSV file missing 'timestamp' column: {csv_path}")
+                return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            
+            # Ensure timestamp is numeric
+            df['timestamp'] = pd.to_numeric(df['timestamp'], errors='coerce')
+            df = df.dropna(subset=['timestamp'])
+            
+            logger.info(f"Loaded {len(df)} existing records from {csv_path}")
+            return df
+        except Exception as e:
+            logger.error(f"Error reading CSV file {csv_path}: {e}")
     
-    try:
-        df = pd.read_csv(csv_path)
-        if 'timestamp' not in df.columns:
-            logger.warning(f"CSV file missing 'timestamp' column: {csv_path}")
-            return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        
-        # Ensure timestamp is numeric
-        df['timestamp'] = pd.to_numeric(df['timestamp'], errors='coerce')
-        df = df.dropna(subset=['timestamp'])
-        
-        logger.info(f"Loaded {len(df)} existing records from {csv_path}")
-        return df
-    except Exception as e:
-        logger.error(f"Error reading CSV file {csv_path}: {e}")
-        return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    # If exact file doesn't exist, search for similar files (different date range)
+    if datasets_folder and coin and interval:
+        existing_file = find_existing_file(datasets_folder, coin, interval)
+        if existing_file and existing_file != csv_path:
+            logger.info(f"Found existing file with different date range: {existing_file}")
+            logger.info(f"Will merge data from {existing_file} into new file: {csv_path}")
+            try:
+                df = pd.read_csv(existing_file)
+                if 'timestamp' not in df.columns:
+                    return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                
+                df['timestamp'] = pd.to_numeric(df['timestamp'], errors='coerce')
+                df = df.dropna(subset=['timestamp'])
+                
+                logger.info(f"Loaded {len(df)} existing records from {existing_file}")
+                return df
+            except Exception as e:
+                logger.error(f"Error reading existing file {existing_file}: {e}")
+    
+    logger.info(f"CSV file does not exist: {csv_path}")
+    return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
 
 def find_missing_periods(
@@ -658,8 +715,8 @@ def main():
                 csv_path = os.path.join(datasets_folder, csv_filename)
                 coin_results['file'] = csv_path
                 
-                # Load existing data
-                existing_df = load_existing_data(csv_path)
+                # Load existing data (check for files with different date ranges)
+                existing_df = load_existing_data(csv_path, datasets_folder, coin, config['interval'])
                 
                 # Find missing periods
                 missing_periods = find_missing_periods(

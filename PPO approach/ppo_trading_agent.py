@@ -110,14 +110,22 @@ class TrainingProgressCallback(BaseCallback):
 
 
 class RewardLoggingCallback(BaseCallback):
-    """Callback to log rewards and episode info."""
+    """Callback to log rewards and episode info with action distribution."""
     
     def __init__(self, verbose: int = 0):
         super().__init__(verbose)
         self.episode_rewards = []
         self.episode_lengths = []
+        self.action_counts = {}
+        self.total_steps = 0
     
     def _on_step(self) -> bool:
+        # Track actions
+        if 'action' in self.locals.get('infos', [{}])[0]:
+            action = self.locals['infos'][0].get('action', 0)
+            self.action_counts[action] = self.action_counts.get(action, 0) + 1
+            self.total_steps += 1
+        
         # Check if episode ended
         if 'episode' in self.locals.get('infos', [{}])[0]:
             info = self.locals['infos'][0]['episode']
@@ -126,16 +134,22 @@ class RewardLoggingCallback(BaseCallback):
             
             if self.verbose > 0 and len(self.episode_rewards) % 10 == 0:
                 mean_reward = np.mean(self.episode_rewards[-10:])
-                print(f"Episode {len(self.episode_rewards)}: Mean reward = {mean_reward:.2f}")
+                # Print action distribution
+                action_dist = {k: v/self.total_steps*100 for k, v in self.action_counts.items()}
+                action_dist_str = ', '.join([f"Action {k}: {v:.1f}%" for k, v in sorted(action_dist.items())])
+                print(f"Episode {len(self.episode_rewards)}: Mean reward = {mean_reward:.2f} | {action_dist_str}")
         
         return True
     
     def get_stats(self) -> Dict:
+        action_dist = {k: v/self.total_steps*100 if self.total_steps > 0 else 0 
+                      for k, v in self.action_counts.items()}
         return {
             'mean_reward': np.mean(self.episode_rewards) if self.episode_rewards else 0,
             'std_reward': np.std(self.episode_rewards) if self.episode_rewards else 0,
             'mean_length': np.mean(self.episode_lengths) if self.episode_lengths else 0,
             'num_episodes': len(self.episode_rewards),
+            'action_distribution': action_dist,
         }
 
 
@@ -420,6 +434,25 @@ def train_with_checkpoints(
     print(f"Total episodes: {stats['num_episodes']}")
     print(f"Mean reward: {stats['mean_reward']:.2f} ± {stats['std_reward']:.2f}")
     print(f"Mean episode length: {stats['mean_length']:.1f}")
+    
+    # Print action distribution
+    if 'action_distribution' in stats:
+        print("\nAction Distribution:")
+        for action, pct in sorted(stats['action_distribution'].items()):
+            action_names = ['Hold', 'Buy Small', 'Buy Medium', 'Buy Large', 
+                          'Sell Small', 'Sell Medium', 'Sell Large', 
+                          'Close Position', 'Reverse Position']
+            action_name = action_names[int(action)] if int(action) < len(action_names) else f"Action {action}"
+            print(f"  {action_name} (Action {action}): {pct:.1f}%")
+        
+        # Warn if agent is only holding
+        if stats['action_distribution'].get(0, 0) > 95:
+            print("\n⚠ WARNING: Agent is taking action 0 (Hold) >95% of the time!")
+            print("  This suggests the reward function may need further tuning.")
+            print("  Consider:")
+            print("    - Increasing profit_scale")
+            print("    - Increasing hold_penalty")
+            print("    - Increasing ent_coef for more exploration")
     
     return model
 

@@ -417,13 +417,22 @@ def prepare_data(df: pd.DataFrame, config: ConfigParser,
         X, y = create_sequences(data_scaled, target_scaled, 
                                 sequence_length, prediction_horizon)
     
-    # Split data chronologically
+    # Split data chronologically for three-way split (60/20/20)
+    # Prediction models train on 60% of data (train_test_split = 0.6)
+    # Remaining 40% is reserved for PPO validation (20%) and test (20%)
+    # This prevents data leakage where models trained on 80% are used for PPO on same 80%
+    if train_test_split > 0.7:
+        print(f"  WARNING: train_test_split = {train_test_split} is > 0.7")
+        print(f"  Recommended: Use 0.6 for three-way split (60/20/20) to prevent data leakage")
+        print(f"  Continuing with {train_test_split} split...")
+    
     split_idx = int(len(X) * train_test_split)
     
     X_train, X_test = X[:split_idx], X[split_idx:]
     y_train, y_test = y[:split_idx], y[split_idx:]
     
-    print(f"  Training samples: {len(X_train)}, Test samples: {len(X_test)}")
+    print(f"  Training samples: {len(X_train)} (prediction models use this 60% only)")
+    print(f"  Test samples: {len(X_test)} (reserved for PPO validation + test, models never see this)")
     
     return {
         'X_train': X_train,

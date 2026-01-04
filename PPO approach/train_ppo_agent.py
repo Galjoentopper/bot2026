@@ -86,7 +86,8 @@ def load_config(config_path: str = None) -> Dict:
             'checkpoint_freq': 50000,
             'eval_freq': 10000,
             'n_eval_episodes': 5,
-            'train_test_split': 0.8,
+            'train_test_split': 0.6,
+            'validation_split': 0.2,
             'max_episode_steps': 1000,
             'device': 'auto',
         },
@@ -144,6 +145,8 @@ def load_config(config_path: str = None) -> Dict:
                           'n_eval_episodes', 'max_episode_steps']:
                     config['training'][key] = int(value) if value.lower() != 'none' else None
                 elif key == 'train_test_split':
+                    config['training'][key] = float(value)
+                elif key == 'validation_split':
                     config['training'][key] = float(value)
                 else:
                     config['training'][key] = value
@@ -282,6 +285,7 @@ def train_ppo(
                 sequence_length=config['environment']['sequence_length'],
                 train_mode=train_mode,
                 train_split=config['training']['train_test_split'],
+                validation_split=config['training'].get('validation_split', 0.2),
                 reward_config=config['reward'],
                 max_episode_steps=config['training']['max_episode_steps'],
                 prediction_horizons=prediction_horizons,
@@ -327,21 +331,40 @@ def train_ppo(
             sequence_length=config['environment']['sequence_length'],
             train_mode=True,
             train_split=config['training']['train_test_split'],
+            validation_split=config['training'].get('validation_split', 0.2),
             reward_config=config['reward'],
             max_episode_steps=config['training']['max_episode_steps'],
             prediction_horizons=prediction_horizons,
         )
         n_envs = 1
     
-    # Create evaluation environment (single env is fine for eval)
+    # Create validation environment (for hyperparameter tuning during training)
+    val_env = TradingEnv(
+        dataset_path=dataset_path,
+        prediction_models=prediction_models,
+        transaction_cost=config['environment']['transaction_cost'],
+        initial_capital=config['environment']['initial_capital'],
+        sequence_length=config['environment']['sequence_length'],
+        train_mode=False,
+        validation_mode=True,  # Use validation data (20%)
+        train_split=config['training']['train_test_split'],
+        validation_split=config['training'].get('validation_split', 0.2),
+        reward_config=config['reward'],
+        max_episode_steps=config['training']['max_episode_steps'],
+        prediction_horizons=prediction_horizons,
+    )
+    
+    # Create evaluation environment (for final test evaluation)
     eval_env = TradingEnv(
         dataset_path=dataset_path,
         prediction_models=prediction_models,
         transaction_cost=config['environment']['transaction_cost'],
         initial_capital=config['environment']['initial_capital'],
         sequence_length=config['environment']['sequence_length'],
-        train_mode=False,  # Use test data
+        train_mode=False,
+        validation_mode=False,  # Use test data (20%, models never saw this)
         train_split=config['training']['train_test_split'],
+        validation_split=config['training'].get('validation_split', 0.2),
         reward_config=config['reward'],
         max_episode_steps=config['training']['max_episode_steps'],
         prediction_horizons=prediction_horizons,
@@ -358,8 +381,10 @@ def train_ppo(
         sample_env = train_env.envs[0].env if hasattr(train_env.envs[0], 'env') else train_env.envs[0]
         if hasattr(sample_env, 'data_end_idx'):
             print(f"  Training data steps: {sample_env.data_end_idx - sample_env.data_start_idx}")
+    if hasattr(val_env, 'data_end_idx'):
+        print(f"  Validation data steps: {val_env.data_end_idx - val_env.data_start_idx}")
     if hasattr(eval_env, 'data_end_idx'):
-        print(f"  Evaluation data steps: {eval_env.data_end_idx - eval_env.data_start_idx}")
+        print(f"  Test data steps: {eval_env.data_end_idx - eval_env.data_start_idx}")
     
     print(f"\n  ⚡ Using {n_envs} parallel environments for {n_envs}x faster data collection")
     print(f"  🎯 GPU will train more frequently (every {config['ppo']['n_steps']} steps)")
@@ -379,7 +404,7 @@ def train_ppo(
         total_timesteps=config['training']['total_timesteps'],
         checkpoint_freq=config['training']['checkpoint_freq'],
         checkpoint_path=checkpoint_path,
-        eval_env=eval_env,
+        eval_env=val_env,  # Use validation env for evaluation during training
         eval_freq=config['training']['eval_freq'],
         n_eval_episodes=config['training']['n_eval_episodes'],
         ppo_config=config['ppo'],
@@ -394,6 +419,7 @@ def train_ppo(
     
     # Clean up
     train_env.close()
+    val_env.close()
     eval_env.close()
     
     return model
