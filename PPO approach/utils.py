@@ -39,21 +39,43 @@ class PortfolioState:
     def update_equity(self, current_price: float):
         """Update unrealized PnL and total equity based on current price."""
         if self.position != 0 and self.entry_price > 0:
-            # Calculate price change percentage
-            if self.position > 0:  # Long position
-                price_change_pct = (current_price - self.entry_price) / self.entry_price
-            else:  # Short position
-                price_change_pct = (self.entry_price - current_price) / self.entry_price
-            
-            # Unrealized PnL is the dollar amount: position_value * price_change_pct
-            position_value = abs(self.position)
-            self.unrealized_pnl = position_value * price_change_pct
+            # Safety check: validate entry price
+            if self.entry_price <= 0 or not np.isfinite(self.entry_price):
+                self.unrealized_pnl = 0.0
+            else:
+                # Calculate price change percentage
+                if self.position > 0:  # Long position
+                    price_change_pct = (current_price - self.entry_price) / self.entry_price
+                else:  # Short position
+                    price_change_pct = (self.entry_price - current_price) / self.entry_price
+                
+                # Clamp price change to reasonable range (-90% to +1000%) to prevent extreme values
+                price_change_pct = np.clip(price_change_pct, -0.9, 10.0)
+                
+                # Unrealized PnL is the dollar amount: position_value * price_change_pct
+                position_value = abs(self.position)
+                self.unrealized_pnl = position_value * price_change_pct
         else:
             self.unrealized_pnl = 0.0
         
         # Total equity = cash + position_value + unrealized_pnl
         # Position value is already in cash (was deducted when opened), so we add unrealized PnL
         self.total_equity = self.cash + abs(self.position) + self.unrealized_pnl
+        
+        # Safety check: prevent unreasonably large equity values
+        # Clamp to reasonable maximum (1 billion) to prevent overflow
+        max_reasonable_equity = 1e9  # 1 billion
+        if self.total_equity > max_reasonable_equity:
+            print(f"⚠ WARNING: Equity {self.total_equity:.2f} exceeds reasonable limit, clamping to {max_reasonable_equity:.2f}")
+            self.total_equity = max_reasonable_equity
+        
+        # Ensure equity is non-negative and finite
+        if not np.isfinite(self.total_equity) or self.total_equity < 0:
+            if not np.isfinite(self.total_equity):
+                print(f"⚠ WARNING: Non-finite equity value {self.total_equity}, resetting to cash value")
+                self.total_equity = max(0.0, self.cash)
+            else:
+                self.total_equity = 0.0
 
 
 class PortfolioTracker:
@@ -210,12 +232,39 @@ class PortfolioTracker:
         """
         equity_array = np.array(self.equity_history)
         
-        total_return = (equity_array[-1] - self.initial_capital) / self.initial_capital * 100
+        # Safety check: prevent division by zero and clamp extreme values
+        if len(equity_array) == 0:
+            final_equity = self.initial_capital
+        else:
+            final_equity = float(equity_array[-1])
+        
+        # Validate initial capital
+        if self.initial_capital <= 0:
+            print(f"⚠ WARNING: Invalid initial_capital={self.initial_capital}, using 10000.0")
+            self.initial_capital = 10000.0
+        
+        # Calculate return with safety checks
+        if self.initial_capital > 0:
+            total_return = (final_equity - self.initial_capital) / self.initial_capital * 100
+            # Clamp to reasonable range (-99% to +10000%) to prevent overflow
+            total_return = np.clip(total_return, -99.0, 10000.0)
+        else:
+            total_return = 0.0
+        
+        # Validate final equity is reasonable
+        if final_equity < 0 or final_equity > self.initial_capital * 1000:
+            print(f"⚠ WARNING: Unusual final_equity={final_equity}, initial={self.initial_capital}")
+            # Clamp to reasonable range
+            final_equity = np.clip(final_equity, 0.0, self.initial_capital * 1000)
+            # Recalculate return with clamped equity
+            if self.initial_capital > 0:
+                total_return = (final_equity - self.initial_capital) / self.initial_capital * 100
+                total_return = np.clip(total_return, -99.0, 10000.0)
         
         # Calculate metrics
         metrics = {
             'total_return_pct': total_return,
-            'final_equity': equity_array[-1],
+            'final_equity': final_equity,
             'num_trades': len(self.trades),
             'sharpe_ratio': calculate_sharpe(self.returns_history),
             'max_drawdown': calculate_max_drawdown(equity_array),
