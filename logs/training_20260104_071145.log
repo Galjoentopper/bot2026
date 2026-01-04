@@ -1,0 +1,40 @@
+2026-01-04 07:11:45,522 - runpod_main - INFO - Logging to: /workspace/bot2026/logs/training_20260104_071145.log
+2026-01-04 07:11:45,524 - runpod_main - INFO - ============================================================
+2026-01-04 07:11:45,526 - runpod_main - INFO - RunPod Training Pipeline
+2026-01-04 07:11:45,527 - runpod_main - INFO - ============================================================
+2026-01-04 07:11:45,529 - runpod_main - INFO - Project path: /workspace/bot2026
+2026-01-04 07:11:45,531 - runpod_main - INFO - Dataset: ADA-EUR_1H_20240101-20251231
+2026-01-04 07:11:45,533 - runpod_main - INFO - ============================================================
+2026-01-04 07:11:45,534 - runpod_main - INFO - Pre-flight Validation
+2026-01-04 07:11:45,535 - runpod_main - INFO - ============================================================
+2026-01-04 07:11:45,537 - runpod_main - INFO - Checking disk space...
+2026-01-04 07:11:45,539 - runpod_main - INFO -   ✓ Disk space: 195592.85 GB free
+2026-01-04 07:11:45,541 - runpod_main - INFO - Checking memory...
+2026-01-04 07:11:45,610 - runpod_main - INFO -   ✓ Memory: 194.51 GB available
+2026-01-04 07:11:45,612 - runpod_main - INFO - Checking GPU...
+2026-01-04 07:11:55,419 - runpod_main - INFO -   ✓ GPU: NVIDIA GeForce RTX 4090
+2026-01-04 07:11:55,421 - runpod_main - INFO - Checking network connectivity...
+2026-01-04 07:11:55,483 - runpod_main - INFO -   ✓ Network: Connected to GitHub
+2026-01-04 07:11:55,485 - runpod_main - INFO - Checking dataset...
+2026-01-04 07:11:56,703 - runpod_main - INFO -   ✓ Dataset: ADA-EUR_1H_20240101-20251231.csv found
+2026-01-04 07:11:56,705 - runpod_main - INFO - Checking dependencies...
+2026-01-04 07:11:56,706 - runpod_main - DEBUG -   ✓ torch
+2026-01-04 07:11:58,394 - matplotlib - DEBUG - matplotlib data path: /usr/local/lib/python3.11/dist-packages/matplotlib/mpl-data
+2026-01-04 07:11:58,432 - matplotlib - DEBUG - CONFIGDIR=/root/.config/matplotlib
+2026-01-04 07:11:58,440 - matplotlib - DEBUG - interactive is False
+2026-01-04 07:11:58,443 - matplotlib - DEBUG - platform is linux
+2026-01-04 07:11:58,608 - matplotlib - DEBUG - CACHEDIR=/root/.cache/matplotlib
+2026-01-04 07:11:58,615 - matplotlib.font_manager - DEBUG - Using fontManager instance from /root/.cache/matplotlib/fontlist-v390.json
+2026-01-04 07:12:00,288 - runpod_main - DEBUG -   ✓ stable_baselines3
+2026-01-04 07:12:00,290 - runpod_main - DEBUG -   ✓ pandas
+2026-01-04 07:12:00,292 - runpod_main - DEBUG -   ✓ numpy
+2026-01-04 07:12:00,294 - runpod_main - INFO - Checking write permissions...
+2026-01-04 07:12:00,297 - runpod_main - DEBUG -   ✓ models/: writable
+2026-01-04 07:12:00,301 - runpod_main - DEBUG -   ✓ models/: writable
+2026-01-04 07:12:00,307 - runpod_main - DEBUG -   ✓ checkpoints/: writable
+2026-01-04 07:12:00,309 - runpod_main - INFO - ============================================================
+2026-01-04 07:12:00,311 - runpod_main - INFO - ✓ All pre-flight checks passed
+2026-01-04 07:12:00,313 - runpod_main - INFO - ============================================================
+2026-01-04 07:12:00,315 - runpod_main - INFO - Starting training pipeline...
+2026-01-04 07:12:00,316 - runpod_main - INFO - ============================================================
+2026-01-04 07:12:00,319 - runpod_main - INFO - Executing training script...

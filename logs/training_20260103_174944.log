@@ -1,0 +1,49 @@
+2026-01-03 17:49:44,009 - runpod_main - INFO - Logging to: /workspace/bot2026/logs/training_20260103_174944.log
+2026-01-03 17:49:44,012 - runpod_main - INFO - ============================================================
+2026-01-03 17:49:44,013 - runpod_main - INFO - RunPod Training Pipeline
+2026-01-03 17:49:44,015 - runpod_main - INFO - ============================================================
+2026-01-03 17:49:44,017 - runpod_main - INFO - Project path: /workspace/bot2026
+2026-01-03 17:49:44,018 - runpod_main - INFO - Dataset: ADA-EUR_1H_20240101-20251231
+2026-01-03 17:49:44,020 - runpod_main - INFO - Running cleanup...
+2026-01-03 17:49:44,025 - runpod_main - INFO - Only 0 checkpoint directory(ies), nothing to clean
+2026-01-03 17:49:44,032 - runpod_main - INFO - ============================================================
+2026-01-03 17:49:44,034 - runpod_main - INFO - Pre-flight Validation
+2026-01-03 17:49:44,035 - runpod_main - INFO - ============================================================
+2026-01-03 17:49:44,037 - runpod_main - INFO - Checking disk space...
+2026-01-03 17:49:44,039 - runpod_main - INFO -   ✓ Disk space: 194018.64 GB free
+2026-01-03 17:49:44,040 - runpod_main - INFO - Checking memory...
+2026-01-03 17:49:44,108 - runpod_main - INFO -   ✓ Memory: 187.41 GB available
+2026-01-03 17:49:44,110 - runpod_main - INFO - Checking GPU...
+2026-01-03 17:49:53,829 - runpod_main - INFO -   ✓ GPU: NVIDIA GeForce RTX 4090
+2026-01-03 17:49:53,832 - runpod_main - INFO - Checking network connectivity...
+2026-01-03 17:49:53,894 - runpod_main - INFO -   ✓ Network: Connected to GitHub
+2026-01-03 17:49:53,895 - runpod_main - INFO - Checking dataset...
+2026-01-03 17:49:55,136 - runpod_main - INFO -   ✓ Dataset: ADA-EUR_1H_20240101-20251231.csv found
+2026-01-03 17:49:55,138 - runpod_main - INFO - Checking dependencies...
+2026-01-03 17:50:05,113 - tensorflow - DEBUG - Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+2026-01-03 17:50:07,124 - h5py._conv - DEBUG - Creating converter from 7 to 5
+2026-01-03 17:50:07,127 - h5py._conv - DEBUG - Creating converter from 5 to 7
+2026-01-03 17:50:07,129 - h5py._conv - DEBUG - Creating converter from 7 to 5
+2026-01-03 17:50:07,131 - h5py._conv - DEBUG - Creating converter from 5 to 7
+2026-01-03 17:50:11,869 - matplotlib - DEBUG - matplotlib data path: /usr/local/lib/python3.11/dist-packages/matplotlib/mpl-data
+2026-01-03 17:50:11,916 - matplotlib - DEBUG - CONFIGDIR=/root/.config/matplotlib
+2026-01-03 17:50:11,923 - matplotlib - DEBUG - interactive is False
+2026-01-03 17:50:11,926 - matplotlib - DEBUG - platform is linux
+2026-01-03 17:50:12,104 - matplotlib - DEBUG - CACHEDIR=/root/.cache/matplotlib
+2026-01-03 17:50:12,111 - matplotlib.font_manager - DEBUG - Using fontManager instance from /root/.cache/matplotlib/fontlist-v390.json
+2026-01-03 17:50:16,822 - runpod_main - DEBUG -   ✓ tensorflow
+2026-01-03 17:50:16,825 - runpod_main - DEBUG -   ✓ torch
+2026-01-03 17:50:17,701 - runpod_main - DEBUG -   ✓ stable_baselines3
+2026-01-03 17:50:17,703 - runpod_main - DEBUG -   ✓ pandas
+2026-01-03 17:50:17,705 - runpod_main - DEBUG -   ✓ numpy
+2026-01-03 17:50:17,706 - runpod_main - INFO - Checking write permissions...
+2026-01-03 17:50:17,711 - runpod_main - DEBUG -   ✓ models/: writable
+2026-01-03 17:50:17,714 - runpod_main - DEBUG -   ✓ models/: writable
+2026-01-03 17:50:17,716 - runpod_main - DEBUG -   ✓ checkpoints/: writable
+2026-01-03 17:50:17,717 - runpod_main - INFO - ============================================================
+2026-01-03 17:50:17,718 - runpod_main - INFO - ✓ All pre-flight checks passed
+2026-01-03 17:50:17,719 - runpod_main - INFO - ============================================================
+2026-01-03 17:50:17,720 - runpod_main - INFO - Starting training pipeline...
+2026-01-03 17:50:17,721 - runpod_main - INFO - ============================================================
+2026-01-03 17:50:17,724 - runpod_main - INFO - Executing training script...
+2026-01-03 18:08:47,445 - runpod_main - ERROR - Training script exited with code 1

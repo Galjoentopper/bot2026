@@ -1,0 +1,46 @@
+2026-01-03 18:11:14,969 - runpod_main - INFO - Logging to: /workspace/bot2026/logs/training_20260103_181114.log
+2026-01-03 18:11:14,972 - runpod_main - INFO - ============================================================
+2026-01-03 18:11:14,974 - runpod_main - INFO - RunPod Training Pipeline
+2026-01-03 18:11:14,975 - runpod_main - INFO - ============================================================
+2026-01-03 18:11:14,977 - runpod_main - INFO - Project path: /workspace/bot2026
+2026-01-03 18:11:14,979 - runpod_main - INFO - Dataset: ADA-EUR_1H_20240101-20251231
+2026-01-03 18:11:14,981 - runpod_main - INFO - ============================================================
+2026-01-03 18:11:14,983 - runpod_main - INFO - Pre-flight Validation
+2026-01-03 18:11:14,985 - runpod_main - INFO - ============================================================
+2026-01-03 18:11:14,987 - runpod_main - INFO - Checking disk space...
+2026-01-03 18:11:14,990 - runpod_main - INFO -   ✓ Disk space: 194010.27 GB free
+2026-01-03 18:11:14,991 - runpod_main - INFO - Checking memory...
+2026-01-03 18:11:15,060 - runpod_main - INFO -   ✓ Memory: 187.51 GB available
+2026-01-03 18:11:15,062 - runpod_main - INFO - Checking GPU...
+2026-01-03 18:11:24,632 - runpod_main - INFO -   ✓ GPU: NVIDIA GeForce RTX 4090
+2026-01-03 18:11:24,635 - runpod_main - INFO - Checking network connectivity...
+2026-01-03 18:11:24,697 - runpod_main - INFO -   ✓ Network: Connected to GitHub
+2026-01-03 18:11:24,703 - runpod_main - INFO - Checking dataset...
+2026-01-03 18:11:25,938 - runpod_main - INFO -   ✓ Dataset: ADA-EUR_1H_20240101-20251231.csv found
+2026-01-03 18:11:25,940 - runpod_main - INFO - Checking dependencies...
+2026-01-03 18:11:35,834 - tensorflow - DEBUG - Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+2026-01-03 18:11:37,842 - h5py._conv - DEBUG - Creating converter from 7 to 5
+2026-01-03 18:11:37,845 - h5py._conv - DEBUG - Creating converter from 5 to 7
+2026-01-03 18:11:37,847 - h5py._conv - DEBUG - Creating converter from 7 to 5
+2026-01-03 18:11:37,848 - h5py._conv - DEBUG - Creating converter from 5 to 7
+2026-01-03 18:11:42,600 - matplotlib - DEBUG - matplotlib data path: /usr/local/lib/python3.11/dist-packages/matplotlib/mpl-data
+2026-01-03 18:11:42,648 - matplotlib - DEBUG - CONFIGDIR=/root/.config/matplotlib
+2026-01-03 18:11:42,656 - matplotlib - DEBUG - interactive is False
+2026-01-03 18:11:42,659 - matplotlib - DEBUG - platform is linux
+2026-01-03 18:11:42,834 - matplotlib - DEBUG - CACHEDIR=/root/.cache/matplotlib
+2026-01-03 18:11:42,840 - matplotlib.font_manager - DEBUG - Using fontManager instance from /root/.cache/matplotlib/fontlist-v390.json
+2026-01-03 18:11:47,538 - runpod_main - DEBUG -   ✓ tensorflow
+2026-01-03 18:11:47,541 - runpod_main - DEBUG -   ✓ torch
+2026-01-03 18:11:48,432 - runpod_main - DEBUG -   ✓ stable_baselines3
+2026-01-03 18:11:48,435 - runpod_main - DEBUG -   ✓ pandas
+2026-01-03 18:11:48,437 - runpod_main - DEBUG -   ✓ numpy
+2026-01-03 18:11:48,439 - runpod_main - INFO - Checking write permissions...
+2026-01-03 18:11:48,445 - runpod_main - DEBUG -   ✓ models/: writable
+2026-01-03 18:11:48,450 - runpod_main - DEBUG -   ✓ models/: writable
+2026-01-03 18:11:48,454 - runpod_main - DEBUG -   ✓ checkpoints/: writable
+2026-01-03 18:11:48,455 - runpod_main - INFO - ============================================================
+2026-01-03 18:11:48,457 - runpod_main - INFO - ✓ All pre-flight checks passed
+2026-01-03 18:11:48,459 - runpod_main - INFO - ============================================================
+2026-01-03 18:11:48,460 - runpod_main - INFO - Starting training pipeline...
+2026-01-03 18:11:48,462 - runpod_main - INFO - ============================================================
+2026-01-03 18:11:48,465 - runpod_main - INFO - Executing training script...

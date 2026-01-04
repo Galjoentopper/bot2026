@@ -1,0 +1,14 @@
+2026-01-04 06:27:24,582 - runpod_main - INFO - Logging to: /workspace/bot2026/logs/training_20260104_062724.log
+2026-01-04 06:27:24,583 - runpod_main - INFO - ============================================================
+2026-01-04 06:27:24,584 - runpod_main - INFO - RunPod Training Pipeline
+2026-01-04 06:27:24,586 - runpod_main - INFO - ============================================================
+2026-01-04 06:27:24,587 - runpod_main - INFO - Project path: /workspace/bot2026
+2026-01-04 06:27:24,588 - runpod_main - INFO - Dataset: ADA-EUR_1H_20240101-20251231
+2026-01-04 06:27:24,589 - runpod_main - INFO - ============================================================
+2026-01-04 06:27:24,591 - runpod_main - INFO - Pre-flight Validation
+2026-01-04 06:27:24,592 - runpod_main - INFO - ============================================================
+2026-01-04 06:27:24,593 - runpod_main - INFO - Checking disk space...
+2026-01-04 06:27:24,594 - runpod_main - INFO -   ✓ Disk space: 195367.96 GB free
+2026-01-04 06:27:24,596 - runpod_main - INFO - Checking memory...
+2026-01-04 06:27:24,676 - runpod_main - INFO -   ✓ Memory: 168.89 GB available
+2026-01-04 06:27:24,677 - runpod_main - INFO - Checking GPU...

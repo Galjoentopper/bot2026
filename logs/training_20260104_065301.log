@@ -1,0 +1,40 @@
+2026-01-04 06:53:01,128 - runpod_main - INFO - Logging to: /workspace/bot2026/logs/training_20260104_065301.log
+2026-01-04 06:53:01,130 - runpod_main - INFO - ============================================================
+2026-01-04 06:53:01,132 - runpod_main - INFO - RunPod Training Pipeline
+2026-01-04 06:53:01,135 - runpod_main - INFO - ============================================================
+2026-01-04 06:53:01,137 - runpod_main - INFO - Project path: /workspace/bot2026
+2026-01-04 06:53:01,139 - runpod_main - INFO - Dataset: ADA-EUR_1H_20240101-20251231
+2026-01-04 06:53:01,140 - runpod_main - INFO - ============================================================
+2026-01-04 06:53:01,142 - runpod_main - INFO - Pre-flight Validation
+2026-01-04 06:53:01,144 - runpod_main - INFO - ============================================================
+2026-01-04 06:53:01,146 - runpod_main - INFO - Checking disk space...
+2026-01-04 06:53:01,149 - runpod_main - INFO -   ✓ Disk space: 195484.31 GB free
+2026-01-04 06:53:01,151 - runpod_main - INFO - Checking memory...
+2026-01-04 06:53:01,219 - runpod_main - INFO -   ✓ Memory: 178.12 GB available
+2026-01-04 06:53:01,221 - runpod_main - INFO - Checking GPU...
+2026-01-04 06:53:11,240 - runpod_main - INFO -   ✓ GPU: NVIDIA GeForce RTX 4090
+2026-01-04 06:53:11,242 - runpod_main - INFO - Checking network connectivity...
+2026-01-04 06:53:11,304 - runpod_main - INFO -   ✓ Network: Connected to GitHub
+2026-01-04 06:53:11,306 - runpod_main - INFO - Checking dataset...
+2026-01-04 06:53:12,615 - runpod_main - INFO -   ✓ Dataset: ADA-EUR_1H_20240101-20251231.csv found
+2026-01-04 06:53:12,617 - runpod_main - INFO - Checking dependencies...
+2026-01-04 06:53:12,620 - runpod_main - WARNING -   ✗ tensorflow: not installed
+2026-01-04 06:53:12,622 - runpod_main - DEBUG -   ✓ torch
+2026-01-04 06:53:14,438 - matplotlib - DEBUG - matplotlib data path: /usr/local/lib/python3.11/dist-packages/matplotlib/mpl-data
+2026-01-04 06:53:14,475 - matplotlib - DEBUG - CONFIGDIR=/root/.config/matplotlib
+2026-01-04 06:53:14,482 - matplotlib - DEBUG - interactive is False
+2026-01-04 06:53:14,485 - matplotlib - DEBUG - platform is linux
+2026-01-04 06:53:14,658 - matplotlib - DEBUG - CACHEDIR=/root/.cache/matplotlib
+2026-01-04 06:53:14,665 - matplotlib.font_manager - DEBUG - Using fontManager instance from /root/.cache/matplotlib/fontlist-v390.json
+2026-01-04 06:53:16,439 - runpod_main - DEBUG -   ✓ stable_baselines3
+2026-01-04 06:53:16,441 - runpod_main - DEBUG -   ✓ pandas
+2026-01-04 06:53:16,443 - runpod_main - DEBUG -   ✓ numpy
+2026-01-04 06:53:16,445 - runpod_main - WARNING -   Missing packages: tensorflow
+2026-01-04 06:53:16,447 - runpod_main - WARNING -   Run: pip install -r requirements.txt
+2026-01-04 06:53:16,449 - runpod_main - INFO - Checking write permissions...
+2026-01-04 06:53:16,453 - runpod_main - DEBUG -   ✓ models/: writable
+2026-01-04 06:53:16,457 - runpod_main - DEBUG -   ✓ models/: writable
+2026-01-04 06:53:16,461 - runpod_main - DEBUG -   ✓ checkpoints/: writable
+2026-01-04 06:53:16,462 - runpod_main - INFO - ============================================================
+2026-01-04 06:53:16,464 - runpod_main - WARNING - ⚠ Some pre-flight checks failed
+2026-01-04 06:53:16,466 - runpod_main - ERROR - Pre-flight validation failed. Use --skip-validation to continue anyway.
