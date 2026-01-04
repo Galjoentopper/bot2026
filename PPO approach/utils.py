@@ -39,14 +39,21 @@ class PortfolioState:
     def update_equity(self, current_price: float):
         """Update unrealized PnL and total equity based on current price."""
         if self.position != 0 and self.entry_price > 0:
+            # Calculate price change percentage
             if self.position > 0:  # Long position
-                self.unrealized_pnl = (current_price - self.entry_price) / self.entry_price * abs(self.position)
+                price_change_pct = (current_price - self.entry_price) / self.entry_price
             else:  # Short position
-                self.unrealized_pnl = (self.entry_price - current_price) / self.entry_price * abs(self.position)
+                price_change_pct = (self.entry_price - current_price) / self.entry_price
+            
+            # Unrealized PnL is the dollar amount: position_value * price_change_pct
+            position_value = abs(self.position)
+            self.unrealized_pnl = position_value * price_change_pct
         else:
             self.unrealized_pnl = 0.0
         
-        self.total_equity = self.cash + abs(self.position) * (1 + self.unrealized_pnl)
+        # Total equity = cash + position_value + unrealized_pnl
+        # Position value is already in cash (was deducted when opened), so we add unrealized PnL
+        self.total_equity = self.cash + abs(self.position) + self.unrealized_pnl
 
 
 class PortfolioTracker:

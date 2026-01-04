@@ -66,13 +66,15 @@ def test_reward_scenarios():
     
     current_equity = env.portfolio.state.total_equity
     position = env.portfolio.state.position
-    num_trades = len(env.portfolio.trades)
+    num_closed_trades = len(env.portfolio.trades)
+    has_open_trade = env.portfolio.current_trade is not None
     
     print(f"Action: {action} (Buy Small)")
     print(f"Reward: {reward:.6f}")
     print(f"Equity change: {current_equity - initial_equity:.2f}")
     print(f"Position: {position:.2f}")
-    print(f"Trades: {num_trades}")
+    print(f"Closed trades: {num_closed_trades}")
+    print(f"Open trade: {has_open_trade}")
     print(f"Profit %: {info.get('profit_pct', 0):.6f}")
     
     if reward == 0.0:
@@ -81,11 +83,19 @@ def test_reward_scenarios():
     else:
         print("✓ PASS: Reward is non-zero")
     
-    if num_trades == 0:
-        print("❌ FAIL: No trade recorded!")
+    # Check if position was opened (position > 0) or trade is being tracked
+    if position == 0 and not has_open_trade:
+        print("❌ FAIL: Position not opened and no trade tracked!")
         all_tests_passed = False
     else:
-        print("✓ PASS: Trade recorded")
+        print("✓ PASS: Position opened or trade tracked")
+    
+    # Check equity change is reasonable (should be small negative due to transaction cost)
+    equity_change = current_equity - initial_equity
+    if abs(equity_change) > initial_equity * 0.1:  # More than 10% change is suspicious
+        print(f"⚠ WARNING: Large equity change ({equity_change:.2f}), may indicate data issue")
+    else:
+        print("✓ PASS: Equity change is reasonable")
     
     # Test 2: Holding with profitable position
     print("\n" + "-" * 70)
@@ -101,15 +111,22 @@ def test_reward_scenarios():
     
     current_equity = env.portfolio.state.total_equity
     unrealized_pnl = env.portfolio.state.unrealized_pnl
+    equity_change = current_equity - previous_equity
     
     print(f"Action: {action} (Hold)")
     print(f"Reward: {reward:.6f}")
-    print(f"Equity change: {current_equity - previous_equity:.2f}")
+    print(f"Equity change: {equity_change:.2f}")
     print(f"Unrealized P&L: {unrealized_pnl:.2f}")
     print(f"Profit %: {info.get('profit_pct', 0):.6f}")
     
+    # Check if equity change is reasonable (should be small percentage of capital)
+    if abs(equity_change) > initial_equity * 0.1:  # More than 10% change is suspicious
+        print(f"⚠ WARNING: Large equity change ({equity_change:.2f}), may indicate data issue")
+    else:
+        print("✓ PASS: Equity change is reasonable")
+    
     # Reward should reflect unrealized P&L if price moved
-    if abs(current_equity - previous_equity) > 0.01 and reward == 0.0:
+    if abs(equity_change) > 0.01 and reward == 0.0:
         print("⚠ WARNING: Equity changed but reward is 0 (may be OK if price didn't move)")
     else:
         print("✓ PASS: Reward calculated for holding")
@@ -128,10 +145,11 @@ def test_reward_scenarios():
     current_equity = env.portfolio.state.total_equity
     num_trades = len(env.portfolio.trades)
     position = env.portfolio.state.position
+    equity_change = current_equity - previous_equity
     
     print(f"Action: {action} (Close Position)")
     print(f"Reward: {reward:.6f}")
-    print(f"Equity change: {current_equity - previous_equity:.2f}")
+    print(f"Equity change: {equity_change:.2f}")
     print(f"Position: {position:.2f} (should be 0)")
     print(f"Trades: {num_trades} (should be {previous_trades + 1})")
     print(f"Profit %: {info.get('profit_pct', 0):.6f}")
@@ -147,6 +165,12 @@ def test_reward_scenarios():
         all_tests_passed = False
     else:
         print("✓ PASS: Trade recorded")
+    
+    # Check equity change is reasonable
+    if abs(equity_change) > initial_equity * 0.1:  # More than 10% change is suspicious
+        print(f"⚠ WARNING: Large equity change ({equity_change:.2f}), may indicate data issue")
+    else:
+        print("✓ PASS: Equity change is reasonable")
     
     # Test 4: Holding with no position
     print("\n" + "-" * 70)
@@ -174,14 +198,24 @@ def test_reward_scenarios():
     print("TEST 5: Episode Tracking")
     print("-" * 70)
     
-    # Run a short episode
-    obs, info = env.reset()
+    # Run a short episode (use max_episode_steps to ensure it ends)
+    test_env = TradingEnv(
+        dataset_path=dataset_path,
+        prediction_models=None,
+        transaction_cost=0.0025,
+        initial_capital=10000.0,
+        sequence_length=60,
+        train_mode=True,
+        max_episode_steps=5,  # Very short episode for testing
+    )
+    
+    obs, info = test_env.reset()
     episode_reward = 0.0
     episode_length = 0
     
-    for _ in range(10):
+    for _ in range(10):  # Should end after 5 steps
         action = np.random.randint(0, 9)  # Random action
-        obs, reward, terminated, truncated, info = env.step(action)
+        obs, reward, terminated, truncated, info = test_env.step(action)
         episode_reward += reward
         episode_length += 1
         
@@ -225,6 +259,7 @@ def test_reward_scenarios():
         print("❌ SOME TESTS FAILED")
         print("\nPlease fix the issues before training.")
     
+    test_env.close()
     env.close()
     return all_tests_passed
 
