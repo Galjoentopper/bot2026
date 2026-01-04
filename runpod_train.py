@@ -397,9 +397,10 @@ else:
     print(f"⚠ Some models missing. Training prediction models...")
     print("=" * 60)
     
-    # Train all models
+    # Train only required models (based on ensemble config)
+    models_str = ', '.join([m.upper() for m in required_models])
     print(f"\nTraining models on dataset: {DATASET_NAME}")
-    print("Models: LSTM, GRU, BiLSTM, DLSTM")
+    print(f"Models: {models_str}")
     print("Task: Classification (Fall, Stationary, Rise)")
     print("-" * 60)
 
@@ -408,7 +409,7 @@ else:
             datasets_dir=str(get_datasets_path()),
             config=config,
             task='classification',
-            models=['lstm', 'gru', 'bilstm', 'dlstm'],
+            models=required_models,  # Use required_models instead of hardcoded list
             specific_dataset=DATASET_NAME,
             use_ensemble=False
         )

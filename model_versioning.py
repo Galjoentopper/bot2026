@@ -387,3 +387,4 @@ if __name__ == '__main__':
     manager.initialize_from_existing_models()
     print(f"\nManifest saved to: {manager.manifest_path}")
 
+

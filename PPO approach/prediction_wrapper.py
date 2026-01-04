@@ -151,13 +151,31 @@ class PredictionModel:
             input_shape = (self.sequence_length, len(self.feature_names) if self.feature_names else 26)
             output_units = 3  # Classification: Fall, Stationary, Rise
             
+            # Read training config to get the correct architecture
+            from configparser import ConfigParser
+            project_path = get_project_path()
+            training_config_path = project_path / 'training_config.txt'
+            
+            units = 256  # Default fallback
+            dropout = 0.2  # Default fallback
+            
+            if training_config_path.exists():
+                try:
+                    config = ConfigParser()
+                    config.read(training_config_path)
+                    if 'MODEL' in config:
+                        units = config.getint('MODEL', 'units', fallback=256)
+                        dropout = config.getfloat('MODEL', 'dropout', fallback=0.2)
+                except Exception as e:
+                    print(f"Warning: Could not read training config, using defaults: {e}")
+            
             # Create model with same architecture as training
             self.model = get_pytorch_model(
                 model_name=self.model_name,
                 input_shape=input_shape,
                 output_units=output_units,
-                units=256,  # Default from training
-                dropout=0.2,  # Default from training
+                units=units,  # Read from training config
+                dropout=dropout,  # Read from training config
                 task='classification'
             )
             
