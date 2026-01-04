@@ -46,6 +46,11 @@ class RewardConfig:
     clip_reward: bool = True
     reward_clip_value: float = 10.0
     
+    # Profit threshold bonus (reward for achieving positive returns)
+    enable_profit_threshold_bonus: bool = True
+    profit_threshold: float = 0.05  # 5% return threshold
+    profit_threshold_bonus: float = 5.0  # Bonus amount when threshold is met
+    
     @classmethod
     def from_dict(cls, config: Dict) -> 'RewardConfig':
         """Create config from dictionary."""
@@ -185,6 +190,19 @@ class RewardCalculator:
             hold_penalty = self._calculate_hold_penalty(holding_time)
             reward -= hold_penalty
         components['hold'] = -hold_penalty
+        
+        # 6. Profit threshold bonus (reward for achieving positive returns)
+        profit_threshold_bonus = 0.0
+        if self.config.enable_profit_threshold_bonus and len(self.equity_history) > 0:
+            initial_equity = self.equity_history[0]
+            if initial_equity > 0:
+                total_return_pct = (current_equity - initial_equity) / initial_equity
+                if total_return_pct >= self.config.profit_threshold:
+                    # Bonus scales with how much above threshold
+                    bonus_multiplier = 1.0 + (total_return_pct - self.config.profit_threshold) / self.config.profit_threshold
+                    profit_threshold_bonus = self.config.profit_threshold_bonus * bonus_multiplier
+                    reward += profit_threshold_bonus
+        components['profit_threshold_bonus'] = profit_threshold_bonus
         
         # Update history
         self._update_history(profit_pct, current_equity)

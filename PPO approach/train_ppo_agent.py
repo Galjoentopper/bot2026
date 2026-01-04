@@ -121,8 +121,8 @@ def load_config(config_path: str = None) -> Dict:
         if 'PPO' in parser:
             for key in parser['PPO']:
                 value = parser['PPO'][key]
-                if key in ['learning_rate', 'gamma', 'gae_lambda', 'clip_range', 
-                          'ent_coef', 'vf_coef', 'max_grad_norm']:
+                if key in ['learning_rate', 'learning_rate_final', 'gamma', 'gae_lambda', 'clip_range', 
+                          'ent_coef', 'ent_coef_final', 'vf_coef', 'max_grad_norm']:
                     config['ppo'][key] = float(value)
                 elif key in ['n_steps', 'batch_size', 'n_epochs']:
                     config['ppo'][key] = int(value)
@@ -130,10 +130,11 @@ def load_config(config_path: str = None) -> Dict:
         if 'REWARD' in parser:
             for key in parser['REWARD']:
                 value = parser['REWARD'][key]
-                if key == 'enable_hold_penalty':
+                if key in ['enable_hold_penalty', 'enable_profit_threshold_bonus']:
                     config['reward'][key] = value.lower() == 'true'
                 elif key in ['profit_scale', 'cost_scale', 'drawdown_penalty', 
-                            'sharpe_bonus', 'hold_penalty']:
+                            'sharpe_bonus', 'hold_penalty', 'profit_threshold', 
+                            'profit_threshold_bonus']:
                     config['reward'][key] = float(value)
                 elif key == 'max_hold_periods':
                     config['reward'][key] = int(value)

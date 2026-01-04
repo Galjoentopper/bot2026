@@ -59,6 +59,56 @@ DEFAULT_PPO_CONFIG = {
 }
 
 
+class LearningRateScheduleCallback(BaseCallback):
+    """Callback to decay learning rate linearly during training."""
+    
+    def __init__(self, initial_lr: float, final_lr: float, total_timesteps: int, verbose: int = 0):
+        super().__init__(verbose)
+        self.initial_lr = initial_lr
+        self.final_lr = final_lr
+        self.total_timesteps = total_timesteps
+    
+    def _on_step(self) -> bool:
+        if self.model is None:
+            return True
+        
+        # Calculate progress (0.0 to 1.0)
+        progress = min(1.0, self.num_timesteps / self.total_timesteps)
+        
+        # Linear decay
+        current_lr = self.initial_lr + (self.final_lr - self.initial_lr) * progress
+        
+        # Update learning rate
+        self.model.learning_rate = current_lr
+        
+        return True
+
+
+class EntropyDecayCallback(BaseCallback):
+    """Callback to decay entropy coefficient linearly during training."""
+    
+    def __init__(self, initial_ent_coef: float, final_ent_coef: float, total_timesteps: int, verbose: int = 0):
+        super().__init__(verbose)
+        self.initial_ent_coef = initial_ent_coef
+        self.final_ent_coef = final_ent_coef
+        self.total_timesteps = total_timesteps
+    
+    def _on_step(self) -> bool:
+        if self.model is None:
+            return True
+        
+        # Calculate progress (0.0 to 1.0)
+        progress = min(1.0, self.num_timesteps / self.total_timesteps)
+        
+        # Linear decay
+        current_ent_coef = self.initial_ent_coef + (self.final_ent_coef - self.initial_ent_coef) * progress
+        
+        # Update entropy coefficient
+        self.model.ent_coef = current_ent_coef
+        
+        return True
+
+
 class TrainingProgressCallback(BaseCallback):
     """
     Custom callback for tracking training progress.
@@ -109,6 +159,44 @@ class TrainingProgressCallback(BaseCallback):
             print(f"Progress saved: {self.num_timesteps} timesteps, {progress['elapsed_time_str']}")
 
 
+class TradingEvalCallback(BaseCallback):
+    """Custom evaluation callback that logs actual trading performance metrics."""
+    
+    def __init__(self, eval_env, verbose: int = 1):
+        super().__init__(verbose)
+        self.eval_env = eval_env
+        self.eval_returns = []
+        self.eval_trades = []
+        self.eval_equities = []
+    
+    def _on_step(self) -> bool:
+        # This will be called during evaluation episodes
+        return True
+    
+    def _on_rollout_end(self) -> bool:
+        # Run evaluation and log trading metrics
+        if hasattr(self, 'model') and self.model is not None:
+            # Get metrics from evaluation environment
+            if hasattr(self.eval_env, 'get_episode_metrics'):
+                try:
+                    metrics = self.eval_env.get_episode_metrics()
+                    return_pct = metrics.get('total_return_pct', 0.0)
+                    num_trades = metrics.get('num_trades', 0)
+                    final_equity = metrics.get('final_equity', 10000.0)
+                    
+                    self.eval_returns.append(return_pct)
+                    self.eval_trades.append(num_trades)
+                    self.eval_equities.append(final_equity)
+                    
+                    if self.verbose > 0 and len(self.eval_returns) > 0:
+                        mean_return = np.mean(self.eval_returns[-5:]) if len(self.eval_returns) >= 5 else np.mean(self.eval_returns)
+                        mean_trades = np.mean(self.eval_trades[-5:]) if len(self.eval_trades) >= 5 else np.mean(self.eval_trades)
+                        print(f"  Eval Return: {mean_return:.2f}% | Trades: {mean_trades:.1f}")
+                except:
+                    pass
+        return True
+
+
 class RewardLoggingCallback(BaseCallback):
     """Callback to log rewards and episode info with action distribution."""
     
@@ -116,6 +204,8 @@ class RewardLoggingCallback(BaseCallback):
         super().__init__(verbose)
         self.episode_rewards = []
         self.episode_lengths = []
+        self.episode_returns = []  # Track actual returns
+        self.episode_trades = []  # Track number of trades
         self.action_counts = {}
         self.total_steps = 0
     
@@ -156,13 +246,27 @@ class RewardLoggingCallback(BaseCallback):
                     self.episode_rewards.append(episode_info['r'])
                     self.episode_lengths.append(episode_info.get('l', 0))
                     
+                    # Track actual trading performance if available
+                    if 'total_return_pct' in episode_info:
+                        self.episode_returns.append(episode_info['total_return_pct'])
+                    if 'num_trades' in episode_info:
+                        self.episode_trades.append(episode_info['num_trades'])
+                    
                     if self.verbose > 0 and len(self.episode_rewards) % 10 == 0:
                         mean_reward = np.mean(self.episode_rewards[-10:])
                         # Print action distribution
                         action_dist = {k: v/self.total_steps*100 if self.total_steps > 0 else 0 
                                      for k, v in self.action_counts.items()}
                         action_dist_str = ', '.join([f"Action {k}: {v:.1f}%" for k, v in sorted(action_dist.items())])
-                        print(f"Episode {len(self.episode_rewards)}: Mean reward = {mean_reward:.2f} | {action_dist_str}")
+                        
+                        # Add return info if available
+                        return_info = ""
+                        if len(self.episode_returns) >= 10:
+                            mean_return = np.mean(self.episode_returns[-10:])
+                            mean_trades = np.mean(self.episode_trades[-10:]) if len(self.episode_trades) >= 10 else 0
+                            return_info = f" | Return: {mean_return:.2f}% | Trades: {mean_trades:.1f}"
+                        
+                        print(f"Episode {len(self.episode_rewards)}: Mean reward = {mean_reward:.2f}{return_info} | {action_dist_str}")
         
         return True
     
@@ -235,31 +339,57 @@ def create_ppo_agent(
     if tensorboard_log is None:
         tensorboard_log = str(get_logs_path())
     
-    # Create agent with OPTIMIZED network architecture for RTX 4090 (24GB VRAM)
-    # Larger network uses more GPU memory and can learn more complex patterns
-    # [1280, 640] = 2 hidden layers: 1280 units (shared) + 640 units (value/policy split)
-    # This will use ~16-18GB GPU memory for ~85-90% utilization on RTX 4090
-    # Reduced from [1536, 768] to stay safely under 24GB VRAM limit
+    # Create agent with IMPROVED network architecture for RTX 4090 (24GB VRAM)
+    # Deeper network: [2048, 1024, 512] = 3 hidden layers for better feature extraction
+    # This will use ~18-20GB GPU memory for ~90-95% utilization on RTX 4090
+    # Deeper networks can learn more complex trading patterns
     policy_kwargs = {
-        'net_arch': [1280, 640]  # OPTIMIZED for RTX 4090 (24GB VRAM) - safe memory usage
+        'net_arch': [2048, 1024, 512]  # IMPROVED: Deeper network for better learning
     }
+    
+    # Extract hyperparameters from config (with updated defaults matching config file)
+    learning_rate = config.get('learning_rate', 0.0003)
+    n_steps = config.get('n_steps', 1024)
+    batch_size = config.get('batch_size', 2048)
+    n_epochs = config.get('n_epochs', 20)
+    gamma = config.get('gamma', 0.99)
+    gae_lambda = config.get('gae_lambda', 0.95)
+    clip_range = config.get('clip_range', 0.2)
+    ent_coef = config.get('ent_coef', 0.05)  # Updated default to match config
+    vf_coef = config.get('vf_coef', 0.5)
+    max_grad_norm = config.get('max_grad_norm', 0.5)
+    verbose = config.get('verbose', 1)
+    
+    # Log the hyperparameters being used (for verification)
+    if verbose > 0:
+        print(f"\nPPO Model Configuration:")
+        print(f"  Network architecture: {policy_kwargs['net_arch']}")
+        print(f"  Learning rate: {learning_rate}")
+        print(f"  n_steps: {n_steps}")
+        print(f"  batch_size: {batch_size}")
+        print(f"  n_epochs: {n_epochs}")
+        print(f"  ent_coef: {ent_coef}")
+        print(f"  gamma: {gamma}")
+        print(f"  gae_lambda: {gae_lambda}")
+        print(f"  clip_range: {clip_range}")
+        print(f"  Device: {device}")
     
     # Create agent
     model = PPO(
         policy='MlpPolicy',
         env=env,
-        learning_rate=config.get('learning_rate', 3e-4),
-        n_steps=config.get('n_steps', 2048),
-        batch_size=config.get('batch_size', 64),
-        n_epochs=config.get('n_epochs', 10),
-        gamma=config.get('gamma', 0.99),
-        gae_lambda=config.get('gae_lambda', 0.95),
-        clip_range=config.get('clip_range', 0.2),
-        ent_coef=config.get('ent_coef', 0.01),
-        vf_coef=config.get('vf_coef', 0.5),
-        max_grad_norm=config.get('max_grad_norm', 0.5),
+        learning_rate=learning_rate,
+        n_steps=n_steps,
+        batch_size=batch_size,
+        n_epochs=n_epochs,
+        gamma=gamma,
+        gae_lambda=gae_lambda,
+        clip_range=clip_range,
+        ent_coef=ent_coef,
+        vf_coef=vf_coef,
+        max_grad_norm=max_grad_norm,
         tensorboard_log=tensorboard_log,
-        verbose=config.get('verbose', 1),
+        verbose=verbose,
         device=device,
         policy_kwargs=policy_kwargs,  # Larger network architecture
     )
@@ -407,9 +537,45 @@ def train_with_checkpoints(
     )
     callbacks.append(checkpoint_callback)
     
-    # Evaluation callback
+    # Evaluation callback with custom logging for trading metrics
     if eval_env is not None:
-        eval_callback = EvalCallback(
+        # Create a custom callback that wraps EvalCallback and logs trading metrics
+        class TradingMetricsEvalCallback(EvalCallback):
+            """Extended EvalCallback that logs actual trading returns."""
+            
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.eval_returns = []
+                self.eval_trades = []
+            
+            def _on_step(self) -> bool:
+                # Call parent's _on_step
+                result = super()._on_step()
+                
+                # Extract trading metrics from episode info if available
+                infos = self.locals.get('infos', [{}])
+                if not isinstance(infos, list):
+                    infos = [infos]
+                
+                for info in infos:
+                    if isinstance(info, dict) and 'episode' in info:
+                        episode_info = info['episode']
+                        if isinstance(episode_info, dict):
+                            # Extract trading metrics
+                            if 'total_return_pct' in episode_info:
+                                self.eval_returns.append(episode_info['total_return_pct'])
+                            if 'num_trades' in episode_info:
+                                self.eval_trades.append(episode_info['num_trades'])
+                            
+                            # Print trading metrics when evaluation completes
+                            if len(self.eval_returns) > 0 and len(self.eval_returns) % n_eval_episodes == 0:
+                                mean_return = np.mean(self.eval_returns[-n_eval_episodes:])
+                                mean_trades = np.mean(self.eval_trades[-n_eval_episodes:]) if len(self.eval_trades) >= n_eval_episodes else 0
+                                print(f"  📊 Trading Performance: Return = {mean_return:.2f}% | Trades = {mean_trades:.1f}")
+                
+                return result
+        
+        eval_callback = TradingMetricsEvalCallback(
             eval_env,
             best_model_save_path=str(checkpoint_path / 'best'),
             log_path=str(checkpoint_path / 'eval_logs'),
@@ -422,6 +588,32 @@ def train_with_checkpoints(
     # Reward logging callback
     reward_callback = RewardLoggingCallback(verbose=1)
     callbacks.append(reward_callback)
+    
+    # Learning rate schedule callback (if configured)
+    if ppo_config and 'learning_rate_final' in ppo_config:
+        initial_lr = ppo_config.get('learning_rate', 0.0003)
+        final_lr = ppo_config.get('learning_rate_final', 0.0001)
+        lr_callback = LearningRateScheduleCallback(
+            initial_lr=initial_lr,
+            final_lr=final_lr,
+            total_timesteps=total_timesteps,
+            verbose=0
+        )
+        callbacks.append(lr_callback)
+        print(f"📉 Learning rate schedule: {initial_lr:.6f} → {final_lr:.6f}")
+    
+    # Entropy decay callback (if configured)
+    if ppo_config and 'ent_coef_final' in ppo_config:
+        initial_ent = ppo_config.get('ent_coef', 0.05)
+        final_ent = ppo_config.get('ent_coef_final', 0.01)
+        ent_callback = EntropyDecayCallback(
+            initial_ent_coef=initial_ent,
+            final_ent_coef=final_ent,
+            total_timesteps=total_timesteps,
+            verbose=0
+        )
+        callbacks.append(ent_callback)
+        print(f"🔍 Entropy decay schedule: {initial_ent:.4f} → {final_ent:.4f}")
     
     # Calculate remaining timesteps
     remaining_timesteps = total_timesteps - start_timesteps

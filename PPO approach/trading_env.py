@@ -596,9 +596,19 @@ class TradingEnv(gym.Env):
         
         # Add episode info when episode ends (for stable-baselines3 EvalCallback)
         if terminated or truncated:
+            # Get actual trading metrics for this episode
+            episode_metrics = self.get_episode_metrics()
+            total_return_pct = episode_metrics.get('total_return_pct', 0.0)
+            num_trades = episode_metrics.get('num_trades', 0)
+            final_equity = episode_metrics.get('final_equity', self.initial_capital)
+            
             info['episode'] = {
-                'r': self.episode_reward,
+                'r': self.episode_reward,  # Cumulative reward (for PPO learning)
                 'l': self.episode_length,
+                # Add actual trading performance metrics
+                'total_return_pct': total_return_pct,
+                'num_trades': num_trades,
+                'final_equity': final_equity,
             }
         
         return observation, reward, terminated, truncated, info

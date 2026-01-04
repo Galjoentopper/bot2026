@@ -670,19 +670,6 @@ else:
                 import traceback
                 traceback.print_exc()
             
-            # Check if BiLSTM needs retraining
-            print("\n" + "=" * 60)
-            print("STEP 5.6: Checking for Underperforming Models")
-            print("=" * 60)
-            try:
-                bilstm_needs_retrain = check_and_retrain_bilstm(DATASET_NAME, PROJECT_PATH, config)
-                if bilstm_needs_retrain:
-                    print("✓ BiLSTM retraining completed")
-            except Exception as e:
-                print(f"⚠ Error checking BiLSTM: {e}")
-                import traceback
-                traceback.print_exc()
-            
             # Print summary
             print("\nTraining Summary:")
             for result in results:
