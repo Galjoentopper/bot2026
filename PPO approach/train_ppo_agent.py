@@ -15,7 +15,7 @@ import argparse
 import multiprocessing
 from pathlib import Path
 from configparser import ConfigParser
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
