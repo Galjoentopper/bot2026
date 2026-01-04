@@ -198,10 +198,11 @@ def create_ppo_agent(
     
     # Create agent with OPTIMIZED network architecture for RTX 4090 (24GB VRAM)
     # Larger network uses more GPU memory and can learn more complex patterns
-    # [1536, 768] = 2 hidden layers: 1536 units (shared) + 768 units (value/policy split)
-    # This will use ~18-20GB GPU memory for ~90-95% utilization on RTX 4090
+    # [1280, 640] = 2 hidden layers: 1280 units (shared) + 640 units (value/policy split)
+    # This will use ~16-18GB GPU memory for ~85-90% utilization on RTX 4090
+    # Reduced from [1536, 768] to stay safely under 24GB VRAM limit
     policy_kwargs = {
-        'net_arch': [1536, 768]  # OPTIMIZED for RTX 4090 (24GB VRAM)
+        'net_arch': [1280, 640]  # OPTIMIZED for RTX 4090 (24GB VRAM) - safe memory usage
     }
     
     # Create agent

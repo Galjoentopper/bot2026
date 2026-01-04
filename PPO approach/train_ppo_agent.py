@@ -12,6 +12,7 @@ Usage:
 import os
 import sys
 import argparse
+import multiprocessing
 from pathlib import Path
 from configparser import ConfigParser
 from typing import Dict, Optional
@@ -290,15 +291,32 @@ def train_ppo(
     # Create vectorized training environment
     # Use SubprocVecEnv for true parallelism (faster) or DummyVecEnv for simpler setup
     if VEC_ENV_AVAILABLE:
+        # Try SubprocVecEnv first, but it requires proper multiprocessing setup
+        # When imported as a module (not run as main), multiprocessing can fail
+        use_subproc = True
         try:
+            # Check if we can use fork (Linux) or need spawn (Windows/Mac)
+            if sys.platform == 'win32':
+                start_method = 'spawn'
+            else:
+                start_method = 'fork'
+            
+            # Try to set start method (may fail if already set)
+            try:
+                multiprocessing.set_start_method(start_method, force=True)
+            except RuntimeError:
+                pass  # Already set, continue
+            
             print(f"  Creating {n_envs} parallel training environments...")
             train_env = SubprocVecEnv([make_env(i, train_mode=True) for i in range(n_envs)])
             print(f"  ✓ Using SubprocVecEnv (true parallelism)")
         except Exception as e:
             print(f"  ⚠ SubprocVecEnv failed: {e}")
-            print(f"  Falling back to DummyVecEnv (sequential)")
-            train_env = DummyVecEnv([make_env(0, train_mode=True)])
-            n_envs = 1
+            print(f"  Falling back to DummyVecEnv with {n_envs} workers")
+            # Use DummyVecEnv with multiple workers - not truly parallel but better than 1
+            # DummyVecEnv runs environments sequentially but batches observations
+            train_env = DummyVecEnv([make_env(i, train_mode=True) for i in range(n_envs)])
+            print(f"  ✓ Using DummyVecEnv with {n_envs} workers (sequential but batched)")
     else:
         # Fallback to single environment if vec_env not available
         train_env = TradingEnv(

@@ -20,10 +20,10 @@ learning_rate = 0.0003
 # NOTE: With vectorized envs, this is total steps across all parallel envs
 n_steps = 1024
 # Batch size (OPTIMIZED for RTX 4090 with 24GB VRAM - target: 90-95% utilization)
-# RTX 4090 has 24GB VRAM, so we can use much larger batches
-# Increased to 2560 for maximum GPU utilization (~18-20GB VRAM usage)
-# Combined with larger network [1536, 768], this should reach 90-95% GPU usage
-batch_size = 2560
+# RTX 4090 has 24GB VRAM, but we need to stay under 24GB to avoid OOM
+# Set to 2048 for safe operation (~16-18GB VRAM usage) - can increase if stable
+# Combined with larger network [1536, 768], this should reach 85-90% GPU usage
+batch_size = 2048
 # Training epochs per update (more epochs = more GPU computation per update)
 # Increased to 20 for MAXIMUM GPU utilization (target: 90-95%)
 # More epochs = more GPU computation per update cycle
