@@ -318,8 +318,15 @@ else:
 # Determine which models to train based on PPO config
 # If using ensemble, only train ensemble models
 if ppo_config['models'].get('prediction_model') == 'ensemble':
-    ensemble_models_str = ppo_config['models'].get('ensemble_models', 'dlstm,bilstm')
-    required_models = [m.strip() for m in ensemble_models_str.split(',')]
+    ensemble_models = ppo_config['models'].get('ensemble_models', ['dlstm', 'bilstm'])
+    # Handle both list and string formats
+    if isinstance(ensemble_models, str):
+        required_models = [m.strip() for m in ensemble_models.split(',')]
+    elif isinstance(ensemble_models, list):
+        required_models = [m.strip() if isinstance(m, str) else str(m) for m in ensemble_models]
+    else:
+        # Fallback to default
+        required_models = ['dlstm', 'bilstm']
     print(f"\n📦 Using ensemble mode - will only train: {', '.join(required_models).upper()}")
 else:
     # Single model mode - train all 4 models (for flexibility)
