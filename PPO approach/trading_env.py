@@ -517,11 +517,19 @@ class TradingEnv(gym.Env):
         if self.done:
             raise RuntimeError("Episode has ended. Call reset().")
         
+        # Track position state before action execution
+        has_position_before = (self.portfolio.state.position != 0)
+        
         # Execute action
         profit_pct, transaction_cost, position_changed = self._execute_action(action)
         
         # Calculate reward
         current_equity = self.portfolio.state.total_equity
+        has_position_after = (self.portfolio.state.position != 0)
+        
+        # Determine if position is being opened or closed
+        is_opening_position = position_changed and not has_position_before and has_position_after
+        is_closing_position = position_changed and has_position_before and not has_position_after
         
         # If position changed, account for immediate equity change (transaction costs, position value)
         if position_changed:
@@ -547,7 +555,9 @@ class TradingEnv(gym.Env):
             current_equity=current_equity,
             holding_time=self.portfolio.holding_time,
             position_changed=position_changed,
-            has_position=(self.portfolio.state.position != 0),
+            has_position=has_position_after,
+            is_opening_position=is_opening_position,
+            action_type=action,
             log_components=True,  # Enable diagnostic logging
         )
         

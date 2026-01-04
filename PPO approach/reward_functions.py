@@ -55,6 +55,13 @@ class RewardConfig:
     enable_inaction_penalty: bool = False
     inaction_penalty: float = 0.03  # Penalty for being flat and not trading
     
+    # Action-specific bonuses (to encourage buying actions)
+    buy_action_bonus: float = 0.75  # Bonus for buying actions (1-3)
+    sell_action_bonus: float = 0.25  # Bonus for selling actions (4-8)
+    
+    # Transaction cost handling for opening positions
+    open_position_cost_ratio: float = 0.5  # Fraction of transaction cost to apply when opening (0.5 = 50%)
+    
     @classmethod
     def from_dict(cls, config: Dict) -> 'RewardConfig':
         """Create config from dictionary."""
@@ -132,6 +139,8 @@ class RewardCalculator:
         action_valid: bool = True,
         position_changed: bool = False,
         has_position: bool = False,
+        is_opening_position: bool = False,
+        action_type: int = -1,  # -1 = unknown, 0-8 = action index
         log_components: bool = False,
     ) -> float:
         """
@@ -145,6 +154,8 @@ class RewardCalculator:
             action_valid: Whether the action was valid
             position_changed: Whether position was opened/closed
             has_position: Whether agent currently has a position (not flat)
+            is_opening_position: Whether this action opened a new position
+            action_type: Action index (0-8), used to determine buy vs sell bonus
             log_components: Whether to log reward components for diagnostics
             
         Returns:
@@ -164,16 +175,26 @@ class RewardCalculator:
         reward += profit_reward
         components['profit'] = profit_reward
         
-        # 2. Transaction cost penalty
+        # 2. Transaction cost penalty (deferred for opening positions)
         if position_changed:
-            cost_penalty = transaction_cost * self.config.cost_scale
-            reward -= cost_penalty
-            components['cost'] = -cost_penalty
-            # Positive reward for taking action (encourages trading activity)
-            # This helps prevent the agent from learning to only hold
-            # Increased to 0.25 to offset typical transaction costs (0.25% of position)
-            # For a full position (100% of capital), transaction cost is ~0.25, so bonus should match
-            action_bonus = 0.25  # Bonus for executing a trade (offsets transaction costs, encourages exploration)
+            if is_opening_position:
+                # When opening: apply reduced cost penalty (e.g., 50% of cost)
+                cost_penalty = transaction_cost * self.config.cost_scale * self.config.open_position_cost_ratio
+                reward -= cost_penalty
+                components['cost'] = -cost_penalty
+                # Larger bonus for buying actions to encourage exploration
+                if action_type in [1, 2, 3]:  # Buy Small, Medium, Large
+                    action_bonus = self.config.buy_action_bonus
+                else:
+                    action_bonus = self.config.sell_action_bonus
+            else:
+                # When closing: apply full cost penalty
+                cost_penalty = transaction_cost * self.config.cost_scale
+                reward -= cost_penalty
+                components['cost'] = -cost_penalty
+                # Standard bonus for selling/closing actions
+                action_bonus = self.config.sell_action_bonus
+            
             reward += action_bonus
             components['action_bonus'] = action_bonus
         else:
