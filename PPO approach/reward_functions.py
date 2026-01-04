@@ -195,11 +195,13 @@ class RewardCalculator:
         profit_threshold_bonus = 0.0
         if self.config.enable_profit_threshold_bonus and len(self.equity_history) > 0:
             initial_equity = self.equity_history[0]
-            if initial_equity > 0:
+            if initial_equity > 0 and np.isfinite(initial_equity) and current_equity > 0:
                 total_return_pct = (current_equity - initial_equity) / initial_equity
-                if total_return_pct >= self.config.profit_threshold:
+                # Clamp to reasonable range
+                total_return_pct = np.clip(total_return_pct, -0.99, 10.0)
+                if total_return_pct >= self.config.profit_threshold and self.config.profit_threshold > 0:
                     # Bonus scales with how much above threshold
-                    bonus_multiplier = 1.0 + (total_return_pct - self.config.profit_threshold) / self.config.profit_threshold
+                    bonus_multiplier = 1.0 + (total_return_pct - self.config.profit_threshold) / max(self.config.profit_threshold, 1e-6)
                     profit_threshold_bonus = self.config.profit_threshold_bonus * bonus_multiplier
                     reward += profit_threshold_bonus
         components['profit_threshold_bonus'] = profit_threshold_bonus
@@ -229,7 +231,13 @@ class RewardCalculator:
             self.peak_equity = current_equity
             return 0.0
         
+        # Validate peak_equity before division
+        if self.peak_equity <= 0 or not np.isfinite(self.peak_equity):
+            return 0.0
+        
         drawdown = (self.peak_equity - current_equity) / self.peak_equity
+        # Clamp drawdown to reasonable range
+        drawdown = np.clip(drawdown, 0.0, 0.99)  # Max 99% drawdown
         
         if drawdown > self.config.max_drawdown_threshold:
             # Larger penalty for exceeding threshold

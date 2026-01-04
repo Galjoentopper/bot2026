@@ -184,8 +184,8 @@ class TradingEnv(gym.Env):
         # Add technical indicators
         df = self._add_technical_indicators(df)
         
-        # Handle NaN values
-        df = df.fillna(method='ffill').fillna(method='bfill').fillna(0)
+        # Handle NaN values (using modern pandas syntax)
+        df = df.ffill().bfill().fillna(0)
         
         self.df = df
         
@@ -330,8 +330,10 @@ class TradingEnv(gym.Env):
         current_price = self.prices[idx]
         price_normalized = (current_price - self.price_mean) / self.price_std
         
-        if idx > 0:
+        if idx > 0 and self.prices[idx - 1] > 0:
             price_change = (current_price - self.prices[idx - 1]) / self.prices[idx - 1]
+            # Clamp to reasonable range
+            price_change = np.clip(price_change, -0.9, 10.0)  # Allow up to 1000% change
         else:
             price_change = 0.0
         
@@ -407,14 +409,14 @@ class TradingEnv(gym.Env):
                 position_changed = True
         
         elif action == 4:  # Sell Small (25%)
-            if position > 0:
-                pnl, cost = self.portfolio.close_position(current_price, self.current_step)
+            if position != 0:
+                pnl, cost = self.portfolio.reduce_position(current_price, 0.25, self.current_step)
                 profit_pct = pnl / self.initial_capital if self.initial_capital > 0 else 0
                 position_changed = True
         
         elif action == 5:  # Sell Medium (50%)
-            if position > 0:
-                pnl, cost = self.portfolio.close_position(current_price, self.current_step)
+            if position != 0:
+                pnl, cost = self.portfolio.reduce_position(current_price, 0.5, self.current_step)
                 profit_pct = pnl / self.initial_capital if self.initial_capital > 0 else 0
                 position_changed = True
         

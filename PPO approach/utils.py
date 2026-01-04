@@ -59,7 +59,9 @@ class PortfolioState:
             self.unrealized_pnl = 0.0
         
         # Total equity = cash + position_value + unrealized_pnl
-        # Position value is already in cash (was deducted when opened), so we add unrealized PnL
+        # When position is opened, cash was reduced by position_value + cost
+        # So equity = remaining_cash + position_value + unrealized_pnl
+        # This correctly represents: cash we have + value of asset we own + profit/loss on that asset
         self.total_equity = self.cash + abs(self.position) + self.unrealized_pnl
         
         # Safety check: prevent unreasonably large equity values
@@ -142,7 +144,10 @@ class PortfolioTracker:
         cost = position_value * self.transaction_cost
         
         # Update state
-        self.state.cash -= cost
+        # IMPORTANT: When opening a position, we spend cash to buy the asset
+        # Cash should be reduced by position_value + transaction cost
+        # The position value represents the asset we now own
+        self.state.cash -= (position_value + cost)
         self.state.position = position_value if position_type == 'long' else -position_value
         self.state.entry_price = price
         self.holding_time = 0
@@ -177,11 +182,19 @@ class PortfolioTracker:
         position_value = abs(self.state.position)
         cost = position_value * self.transaction_cost
         
+        # Validate entry price before calculation
+        if self.state.entry_price <= 0 or not np.isfinite(self.state.entry_price):
+            print(f"⚠ WARNING: Invalid entry_price={self.state.entry_price} when closing position, using price as entry")
+            self.state.entry_price = price
+        
         # Calculate PnL
         if self.state.position > 0:  # Long position
             pnl_pct = (price - self.state.entry_price) / self.state.entry_price
         else:  # Short position
             pnl_pct = (self.state.entry_price - price) / self.state.entry_price
+        
+        # Clamp pnl_pct to reasonable range to prevent extreme values
+        pnl_pct = np.clip(pnl_pct, -1.0, 10.0)  # Allow up to 1000% gain, 100% loss
         
         pnl = position_value * pnl_pct - cost
         
@@ -206,6 +219,78 @@ class PortfolioTracker:
         
         return pnl, cost
     
+    def reduce_position(self, price: float, fraction: float, timestep: int) -> Tuple[float, float]:
+        """
+        Partially close a position.
+        
+        Args:
+            price: Current price
+            fraction: Fraction of position to close (0-1)
+            timestep: Current timestep
+            
+        Returns:
+            Tuple of (realized PnL, transaction cost)
+        """
+        if self.state.position == 0:
+            return 0.0, 0.0
+        
+        # Clamp fraction to valid range
+        fraction = np.clip(fraction, 0.0, 1.0)
+        if fraction == 0.0:
+            return 0.0, 0.0
+        
+        position_value = abs(self.state.position)
+        close_value = position_value * fraction
+        cost = close_value * self.transaction_cost
+        
+        # Validate entry price
+        if self.state.entry_price <= 0 or not np.isfinite(self.state.entry_price):
+            print(f"⚠ WARNING: Invalid entry_price={self.state.entry_price} when reducing position, using price as entry")
+            self.state.entry_price = price
+        
+        # Calculate PnL for the portion being closed
+        if self.state.position > 0:  # Long position
+            pnl_pct = (price - self.state.entry_price) / self.state.entry_price
+        else:  # Short position
+            pnl_pct = (self.state.entry_price - price) / self.state.entry_price
+        
+        # Clamp pnl_pct to reasonable range
+        pnl_pct = np.clip(pnl_pct, -1.0, 10.0)
+        
+        pnl = close_value * pnl_pct - cost
+        
+        # Update cash
+        self.state.cash += close_value + pnl
+        
+        # Reduce position
+        if self.state.position > 0:
+            self.state.position -= close_value
+        else:
+            self.state.position += close_value  # For short, position is negative
+        
+        # If position is fully closed (or nearly so), reset entry price
+        if abs(self.state.position) < 1e-6:
+            self.state.position = 0.0
+            self.state.entry_price = 0.0
+            self.state.unrealized_pnl = 0.0
+            self.holding_time = 0
+            if self.current_trade is not None:
+                self.current_trade.exit_time = timestep
+                self.current_trade.exit_price = price
+                self.current_trade.pnl += pnl
+                self.current_trade.pnl_pct = (self.current_trade.pnl / position_value) * 100 if position_value > 0 else 0
+                self.current_trade.transaction_cost += cost
+                self.trades.append(self.current_trade)
+                self.current_trade = None
+        else:
+            # Update current trade if exists (partial close)
+            if self.current_trade is not None:
+                # Don't close the trade yet, just update it
+                self.current_trade.transaction_cost += cost
+                # Note: We don't update exit_time/exit_price for partial closes
+        
+        return pnl, cost
+    
     def step(self, current_price: float):
         """
         Update portfolio state for current timestep.
@@ -217,8 +302,15 @@ class PortfolioTracker:
         self.equity_history.append(self.state.total_equity)
         
         if len(self.equity_history) > 1:
-            ret = (self.equity_history[-1] - self.equity_history[-2]) / self.equity_history[-2]
-            self.returns_history.append(ret)
+            prev_equity = self.equity_history[-2]
+            if prev_equity > 0 and np.isfinite(prev_equity):
+                ret = (self.equity_history[-1] - prev_equity) / prev_equity
+                # Clamp to reasonable range
+                ret = np.clip(ret, -0.99, 10.0)  # Allow up to 1000% gain, 99% loss
+                self.returns_history.append(ret)
+            else:
+                # Skip if previous equity is invalid
+                self.returns_history.append(0.0)
         
         if self.state.position != 0:
             self.holding_time += 1
