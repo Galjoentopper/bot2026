@@ -13,6 +13,25 @@ from pathlib import Path
 from typing import Optional, List
 
 
+def configure_git_for_large_files(repo_path: Optional[Path] = None) -> None:
+    """
+    Configure Git settings for pushing large files.
+    Increases buffer size and timeout to handle large model files.
+    """
+    repo_path = repo_path or Path.cwd()
+    try:
+        # Increase HTTP post buffer for large files (500MB)
+        run_git_command(['config', 'http.postBuffer', '524288000'], cwd=repo_path, check=False)
+        # Increase HTTP timeout (5 minutes)
+        run_git_command(['config', 'http.timeout', '300'], cwd=repo_path, check=False)
+        # Enable HTTP version 1.1 (more stable for large uploads)
+        run_git_command(['config', 'http.version', 'HTTP/1.1'], cwd=repo_path, check=False)
+        # Increase compression level (faster for large files)
+        run_git_command(['config', 'core.compression', '0'], cwd=repo_path, check=False)
+    except Exception as e:
+        print(f"Warning: Could not configure Git for large files: {e}")
+
+
 def run_git_command(cmd: List[str], cwd: Optional[Path] = None, check: bool = True) -> tuple[int, str, str]:
     """
     Run a git command and return the result.
@@ -187,6 +206,9 @@ def push_to_github(repo_path: Path, branch: str = 'main', force: bool = False) -
         True if push successful, False otherwise
     """
     try:
+        # Configure Git for large file pushes
+        configure_git_for_large_files(repo_path)
+        
         # Check authentication
         if not check_git_auth(repo_path):
             print("Warning: Git authentication not configured. Attempting to setup...")
@@ -195,15 +217,35 @@ def push_to_github(repo_path: Path, branch: str = 'main', force: bool = False) -
                 print("Please set GITHUB_TOKEN environment variable or configure SSH keys")
                 return False
         
-        # Push
+        # Push with increased timeout
         cmd = ['push']
         if force:
             cmd.append('--force')
         cmd.extend(['origin', branch])
         
-        run_git_command(cmd, cwd=repo_path)
-        print(f"✓ Successfully pushed to {branch}")
-        return True
+        # Use environment variables for timeout
+        import os
+        env = os.environ.copy()
+        env['GIT_HTTP_TIMEOUT'] = '300'  # 5 minutes
+        
+        result = subprocess.run(
+            ['git'] + cmd,
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=600  # 10 minute overall timeout
+        )
+        
+        if result.returncode == 0:
+            print(f"✓ Successfully pushed to {branch}")
+            return True
+        else:
+            print(f"Error pushing to GitHub: {result.stderr}")
+            return False
+    except subprocess.TimeoutExpired:
+        print("Error: Push timed out. Try pushing in smaller chunks or use Git LFS for large files.")
+        return False
     except Exception as e:
         print(f"Error pushing to GitHub: {e}")
         return False
