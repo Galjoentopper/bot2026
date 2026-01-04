@@ -357,3 +357,4 @@ def load_model(model: nn.Module, path: str, device: Optional[torch.device] = Non
     print(f"Model loaded from {path}")
     return model
 
+

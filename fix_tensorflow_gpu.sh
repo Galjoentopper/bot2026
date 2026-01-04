@@ -137,3 +137,4 @@ echo "2. Contact RunPod support about CuDNN 9.3.0 installation"
 echo "3. Use PyTorch for GPU training (it works correctly)"
 echo ""
 
+
