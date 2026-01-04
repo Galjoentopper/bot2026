@@ -120,24 +120,49 @@ class RewardLoggingCallback(BaseCallback):
         self.total_steps = 0
     
     def _on_step(self) -> bool:
-        # Track actions
-        if 'action' in self.locals.get('infos', [{}])[0]:
-            action = self.locals['infos'][0].get('action', 0)
-            self.action_counts[action] = self.action_counts.get(action, 0) + 1
-            self.total_steps += 1
+        # Get infos - handle both single env and vectorized env formats
+        infos = self.locals.get('infos', [{}])
         
-        # Check if episode ended
-        if 'episode' in self.locals.get('infos', [{}])[0]:
-            info = self.locals['infos'][0]['episode']
-            self.episode_rewards.append(info['r'])
-            self.episode_lengths.append(info['l'])
+        # Handle different info structures:
+        # - Single env: infos is a list with one dict
+        # - Vectorized env: infos is a list of lists, each containing dicts
+        # - Sometimes infos might be a single dict
+        if not isinstance(infos, list):
+            infos = [infos]
+        
+        # Flatten if vectorized (list of lists)
+        flattened_infos = []
+        for item in infos:
+            if isinstance(item, list):
+                flattened_infos.extend(item)
+            else:
+                flattened_infos.append(item)
+        
+        # Track actions and check for episode endings across all environments
+        for info in flattened_infos:
+            if not isinstance(info, dict):
+                continue
+                
+            # Track actions
+            if 'action' in info:
+                action = info.get('action', 0)
+                self.action_counts[action] = self.action_counts.get(action, 0) + 1
+                self.total_steps += 1
             
-            if self.verbose > 0 and len(self.episode_rewards) % 10 == 0:
-                mean_reward = np.mean(self.episode_rewards[-10:])
-                # Print action distribution
-                action_dist = {k: v/self.total_steps*100 for k, v in self.action_counts.items()}
-                action_dist_str = ', '.join([f"Action {k}: {v:.1f}%" for k, v in sorted(action_dist.items())])
-                print(f"Episode {len(self.episode_rewards)}: Mean reward = {mean_reward:.2f} | {action_dist_str}")
+            # Check if episode ended (for vectorized envs, check all)
+            if 'episode' in info:
+                episode_info = info['episode']
+                if isinstance(episode_info, dict) and 'r' in episode_info:
+                    self.episode_rewards.append(episode_info['r'])
+                    self.episode_lengths.append(episode_info.get('l', 0))
+                    
+                    if self.verbose > 0 and len(self.episode_rewards) % 10 == 0:
+                        mean_reward = np.mean(self.episode_rewards[-10:])
+                        # Print action distribution
+                        action_dist = {k: v/self.total_steps*100 if self.total_steps > 0 else 0 
+                                     for k, v in self.action_counts.items()}
+                        action_dist_str = ', '.join([f"Action {k}: {v:.1f}%" for k, v in sorted(action_dist.items())])
+                        print(f"Episode {len(self.episode_rewards)}: Mean reward = {mean_reward:.2f} | {action_dist_str}")
         
         return True
     

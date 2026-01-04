@@ -108,7 +108,8 @@ def backtest_ppo_agent(
     dataset_name: str,
     n_episodes: int = 10,
     deterministic: bool = True,
-    save_results: bool = True
+    save_results: bool = True,
+    use_stochastic: bool = False
 ) -> Dict:
     """
     Backtest a trained PPO agent.
@@ -117,8 +118,10 @@ def backtest_ppo_agent(
         model_path: Path to saved model (.zip)
         dataset_name: Dataset to backtest on
         n_episodes: Number of episodes to run
-        deterministic: Use deterministic actions
+        deterministic: Use deterministic actions (if False, uses stochastic)
         save_results: Save results to file
+        use_stochastic: If True, use stochastic evaluation even if deterministic=True
+                       (helps see what agent actually learned vs conservative argmax)
         
     Returns:
         Dictionary of backtest results
@@ -212,7 +215,10 @@ def backtest_ppo_agent(
         
         step = 0
         while not done:
-            action, _ = model.predict(obs, deterministic=deterministic)
+            # Use stochastic evaluation if requested (helps see what agent actually learned)
+            # Otherwise use deterministic (argmax) which may be too conservative
+            eval_deterministic = deterministic and not use_stochastic
+            action, _ = model.predict(obs, deterministic=eval_deterministic)
             obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
             

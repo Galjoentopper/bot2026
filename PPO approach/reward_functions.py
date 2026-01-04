@@ -156,9 +156,11 @@ class RewardCalculator:
             cost_penalty = transaction_cost * self.config.cost_scale
             reward -= cost_penalty
             components['cost'] = -cost_penalty
-            # Small positive reward for taking action (encourages trading activity)
+            # Positive reward for taking action (encourages trading activity)
             # This helps prevent the agent from learning to only hold
-            action_bonus = 0.01  # Small bonus for executing a trade
+            # Increased to 0.25 to offset typical transaction costs (0.25% of position)
+            # For a full position (100% of capital), transaction cost is ~0.25, so bonus should match
+            action_bonus = 0.25  # Bonus for executing a trade (offsets transaction costs, encourages exploration)
             reward += action_bonus
             components['action_bonus'] = action_bonus
         else:

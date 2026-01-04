@@ -40,7 +40,8 @@ def evaluate_ppo_agent(
     n_episodes: int = 10,
     deterministic: bool = True,
     render: bool = False,
-    save_results: bool = True
+    save_results: bool = True,
+    use_stochastic: bool = False
 ) -> Dict:
     """
     Evaluate a trained PPO agent.
@@ -49,9 +50,11 @@ def evaluate_ppo_agent(
         model_path: Path to saved model (.zip)
         dataset_name: Dataset to evaluate on
         n_episodes: Number of evaluation episodes
-        deterministic: Use deterministic actions
+        deterministic: Use deterministic actions (if False, uses stochastic)
         render: Render environment
         save_results: Save results to file
+        use_stochastic: If True, use stochastic evaluation even if deterministic=True
+                       (helps see what agent actually learned vs conservative argmax)
         
     Returns:
         Dictionary of evaluation metrics
@@ -127,7 +130,10 @@ def evaluate_ppo_agent(
         actions = []
         
         while not done:
-            action, _ = model.predict(obs, deterministic=deterministic)
+            # Use stochastic evaluation if requested (helps see what agent actually learned)
+            # Otherwise use deterministic (argmax) which may be too conservative
+            eval_deterministic = deterministic and not use_stochastic
+            action, _ = model.predict(obs, deterministic=eval_deterministic)
             obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
             
