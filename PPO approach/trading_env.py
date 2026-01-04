@@ -547,6 +547,7 @@ class TradingEnv(gym.Env):
             current_equity=current_equity,
             holding_time=self.portfolio.holding_time,
             position_changed=position_changed,
+            has_position=(self.portfolio.state.position != 0),
             log_components=True,  # Enable diagnostic logging
         )
         

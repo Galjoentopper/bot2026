@@ -109,6 +109,87 @@ class EntropyDecayCallback(BaseCallback):
         return True
 
 
+class PolicyCollapseCallback(BaseCallback):
+    """Detect and warn when policy collapses to single action."""
+    
+    def __init__(self, threshold: float = 0.90, check_freq: int = 10000, verbose: int = 1):
+        """
+        Initialize policy collapse detector.
+        
+        Args:
+            threshold: Action percentage threshold (0.90 = 90%) to trigger warning
+            check_freq: Frequency in steps to check for collapse
+            verbose: Verbosity level
+        """
+        super().__init__(verbose)
+        self.threshold = threshold
+        self.check_freq = check_freq
+        self.action_counts = {}
+        self.total_actions = 0
+    
+    def _on_step(self) -> bool:
+        # Track actions from infos
+        infos = self.locals.get('infos', [{}])
+        
+        # Handle different info structures (single env vs vectorized)
+        if not isinstance(infos, list):
+            infos = [infos]
+        
+        # Flatten if vectorized (list of lists)
+        flattened_infos = []
+        for item in infos:
+            if isinstance(item, list):
+                flattened_infos.extend(item)
+            else:
+                flattened_infos.append(item)
+        
+        # Track actions
+        for info in flattened_infos:
+            if isinstance(info, dict) and 'action' in info:
+                action = int(info['action'])
+                self.action_counts[action] = self.action_counts.get(action, 0) + 1
+                self.total_actions += 1
+        
+        # Check for collapse every check_freq steps
+        if self.num_timesteps % self.check_freq == 0 and self.total_actions > 0:
+            # Calculate action distribution
+            action_dist = {
+                k: v / self.total_actions 
+                for k, v in self.action_counts.items()
+            }
+            
+            # Find maximum action percentage
+            max_action = max(action_dist.items(), key=lambda x: x[1])
+            max_action_id, max_action_pct = max_action
+            
+            if max_action_pct > self.threshold:
+                action_names = ['Hold', 'Buy Small', 'Buy Medium', 'Buy Large', 
+                              'Sell Small', 'Sell Medium', 'Sell Large', 
+                              'Close Position', 'Reverse Position']
+                action_name = action_names[max_action_id] if max_action_id < len(action_names) else f"Action {max_action_id}"
+                
+                if self.verbose > 0:
+                    print(f"\n⚠️  POLICY COLLAPSE DETECTED @ {self.num_timesteps} steps")
+                    print(f"   Action {max_action_id} ({action_name}): {max_action_pct*100:.1f}%")
+                    print(f"   Threshold: {self.threshold*100:.1f}%")
+                    print(f"   Action distribution: {dict(sorted(action_dist.items()))}")
+                    print(f"   Consider: increasing ent_coef, checking rewards, or resetting training")
+            
+            # Log action distribution even if not collapsed
+            elif self.verbose > 0 and self.num_timesteps % (self.check_freq * 5) == 0:
+                # Log every 5 checks (50K steps) for monitoring
+                action_names = ['Hold', 'Buy Small', 'Buy Medium', 'Buy Large', 
+                              'Sell Small', 'Sell Medium', 'Sell Large', 
+                              'Close Position', 'Reverse Position']
+                print(f"\n📊 Action Distribution @ {self.num_timesteps} steps:")
+                for action_id, pct in sorted(action_dist.items()):
+                    action_name = action_names[action_id] if action_id < len(action_names) else f"Action {action_id}"
+                    if pct > 0.01:  # Only show actions with >1% usage
+                        print(f"   {action_name}: {pct*100:.1f}%")
+        
+        return True
+
+
 class TrainingProgressCallback(BaseCallback):
     """
     Custom callback for tracking training progress.
@@ -268,6 +349,49 @@ class RewardLoggingCallback(BaseCallback):
                         
                         print(f"Episode {len(self.episode_rewards)}: Mean reward = {mean_reward:.2f}{return_info} | {action_dist_str}")
         
+        # Log detailed reward statistics every 10K steps
+        if self.verbose > 0 and self.num_timesteps > 0 and self.num_timesteps % 10000 == 0:
+            if len(self.episode_rewards) > 0:
+                recent_rewards = self.episode_rewards[-100:] if len(self.episode_rewards) >= 100 else self.episode_rewards
+                reward_mean = np.mean(recent_rewards)
+                reward_std = np.std(recent_rewards)
+                reward_min = np.min(recent_rewards)
+                reward_max = np.max(recent_rewards)
+                
+                print(f"\n📊 Reward Diagnostics @ {self.num_timesteps} steps:")
+                print(f"   Mean reward: {reward_mean:.4f} ± {reward_std:.4f}")
+                print(f"   Reward range: [{reward_min:.2f}, {reward_max:.2f}]")
+                
+                # Check for reward collapse (variance near zero)
+                if reward_std < 0.01:
+                    print(f"   ⚠️  WARNING: Reward variance near zero ({reward_std:.6f}) - possible collapse!")
+                    print(f"   This suggests the agent may have collapsed to a degenerate policy.")
+                
+                # Action distribution summary
+                if self.total_steps > 0:
+                    action_dist = {k: v/self.total_steps*100 for k, v in self.action_counts.items()}
+                    max_action_pct = max(action_dist.values()) if action_dist else 0
+                    num_actions_used = len([p for p in action_dist.values() if p > 1.0])  # Actions with >1% usage
+                    
+                    print(f"   Actions used (>1%): {num_actions_used}/9")
+                    print(f"   Most common action: {max_action_pct:.1f}%")
+                    
+                    if max_action_pct > 80:
+                        print(f"   ⚠️  WARNING: Single action dominates ({max_action_pct:.1f}%) - possible collapse!")
+                
+                # Trading performance if available
+                if len(self.episode_returns) >= 10:
+                    recent_returns = self.episode_returns[-50:] if len(self.episode_returns) >= 50 else self.episode_returns
+                    mean_return = np.mean(recent_returns)
+                    std_return = np.std(recent_returns)
+                    mean_trades = np.mean(self.episode_trades[-50:]) if len(self.episode_trades) >= 50 else np.mean(self.episode_trades)
+                    
+                    print(f"   Mean return: {mean_return:.2f}% ± {std_return:.2f}%")
+                    print(f"   Mean trades/episode: {mean_trades:.1f}")
+                    
+                    if mean_trades < 1.0:
+                        print(f"   ⚠️  WARNING: Very few trades ({mean_trades:.1f}) - agent may be avoiding trading!")
+        
         return True
     
     def get_stats(self) -> Dict:
@@ -339,23 +463,23 @@ def create_ppo_agent(
     if tensorboard_log is None:
         tensorboard_log = str(get_logs_path())
     
-    # Create agent with IMPROVED network architecture for RTX 4090 (24GB VRAM)
-    # Deeper network: [2048, 1024, 512] = 3 hidden layers for better feature extraction
-    # This will use ~18-20GB GPU memory for ~90-95% utilization on RTX 4090
-    # Deeper networks can learn more complex trading patterns
+    # Create agent with REDUCED network architecture for more stable learning
+    # Smaller network: [256, 128] = 2 hidden layers - easier to train and less prone to collapse
+    # Previous [2048, 1024, 512] was too large and may have contributed to policy collapse
+    # Smaller networks train faster and are more stable for this problem size
     policy_kwargs = {
-        'net_arch': [2048, 1024, 512]  # IMPROVED: Deeper network for better learning
+        'net_arch': [256, 128]  # Reduced from [2048, 1024, 512] for stability
     }
     
     # Extract hyperparameters from config (with updated defaults matching config file)
     learning_rate = config.get('learning_rate', 0.0003)
-    n_steps = config.get('n_steps', 1024)
-    batch_size = config.get('batch_size', 2048)
-    n_epochs = config.get('n_epochs', 20)
+    n_steps = config.get('n_steps', 512)
+    batch_size = config.get('batch_size', 256)
+    n_epochs = config.get('n_epochs', 10)
     gamma = config.get('gamma', 0.99)
     gae_lambda = config.get('gae_lambda', 0.95)
     clip_range = config.get('clip_range', 0.2)
-    ent_coef = config.get('ent_coef', 0.05)  # Updated default to match config
+    ent_coef = config.get('ent_coef', 0.15)  # Updated default to match config (much higher for exploration)
     vf_coef = config.get('vf_coef', 0.5)
     max_grad_norm = config.get('max_grad_norm', 0.5)
     verbose = config.get('verbose', 1)
@@ -588,6 +712,10 @@ def train_with_checkpoints(
     # Reward logging callback
     reward_callback = RewardLoggingCallback(verbose=1)
     callbacks.append(reward_callback)
+    
+    # Policy collapse detection callback
+    collapse_callback = PolicyCollapseCallback(threshold=0.90, check_freq=10000, verbose=1)
+    callbacks.append(collapse_callback)
     
     # Learning rate schedule callback (if configured)
     if ppo_config and 'learning_rate_final' in ppo_config:

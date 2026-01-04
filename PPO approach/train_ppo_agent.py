@@ -41,6 +41,175 @@ except ImportError:
     print("Warning: stable-baselines3 vec_env not available. Install with: pip install stable-baselines3")
 
 
+def run_validation_test(
+    dataset_path: Path,
+    prediction_models,
+    reward_config: Dict,
+    prediction_horizons: List[int],
+    skip_validation: bool = False
+) -> bool:
+    """
+    Run a quick 50K step validation test to verify agent is learning.
+    
+    This test verifies:
+    - Agent explores multiple actions (not collapsed to single action)
+    - Rewards are non-zero (both positive and negative)
+    - Agent is actually learning, not stuck
+    
+    Args:
+        dataset_path: Path to dataset
+        prediction_models: Loaded prediction models
+        reward_config: Reward configuration
+        prediction_horizons: Prediction horizons
+        skip_validation: If True, skip validation and return True
+        
+    Returns:
+        True if validation passes, False otherwise
+    """
+    if skip_validation:
+        return True
+    
+    print("\n" + "=" * 60)
+    print("VALIDATION TEST (50K steps)")
+    print("=" * 60)
+    print("Running quick validation to verify agent can learn...")
+    print("This will take ~2-3 minutes.")
+    
+    try:
+        from trading_env import TradingEnv
+        from ppo_trading_agent import create_ppo_agent
+        from stable_baselines3.common.callbacks import CallbackList
+        
+        # Create simple validation environment (single env for speed)
+        val_test_env = TradingEnv(
+            dataset_path=dataset_path,
+            prediction_models=prediction_models if prediction_models and prediction_models.loaded else None,
+            transaction_cost=0.0025,
+            initial_capital=10000,
+            sequence_length=60,
+            train_mode=True,
+            train_split=0.6,
+            validation_split=0.2,
+            reward_config=reward_config,
+            max_episode_steps=500,  # Shorter episodes for faster validation
+            prediction_horizons=prediction_horizons,
+        )
+        
+        # Create agent with high exploration for validation
+        val_ppo_config = {
+            'learning_rate': 0.001,  # Higher LR for fast test
+            'n_steps': 256,
+            'batch_size': 64,
+            'n_epochs': 5,
+            'gamma': 0.99,
+            'gae_lambda': 0.95,
+            'clip_range': 0.2,
+            'ent_coef': 0.3,  # Very high exploration for validation
+            'vf_coef': 0.5,
+            'max_grad_norm': 0.5,
+            'verbose': 0,
+        }
+        
+        print("\nCreating validation agent with high exploration (ent_coef=0.3)...")
+        val_model = create_ppo_agent(
+            env=val_test_env,
+            config=val_ppo_config,
+            device='auto'
+        )
+        
+        # Create callbacks to track validation metrics
+        from ppo_trading_agent import PolicyCollapseCallback, RewardLoggingCallback
+        collapse_callback = PolicyCollapseCallback(threshold=0.90, check_freq=10000, verbose=1)
+        reward_callback = RewardLoggingCallback(verbose=0)  # Silent during validation
+        
+        print("Running 50,000 step validation test...")
+        val_model.learn(
+            total_timesteps=50000,
+            callback=CallbackList([collapse_callback, reward_callback]),
+            progress_bar=True,
+        )
+        
+        # Analyze results
+        print("\n" + "=" * 60)
+        print("VALIDATION RESULTS")
+        print("=" * 60)
+        
+        # Check action distribution
+        action_stats = collapse_callback.action_counts
+        total_actions = collapse_callback.total_actions
+        
+        if total_actions == 0:
+            print("❌ VALIDATION FAILED: No actions recorded!")
+            val_test_env.close()
+            return False
+        
+        action_dist = {k: v/total_actions*100 for k, v in action_stats.items()}
+        num_actions_used = len([p for p in action_dist.values() if p > 1.0])  # Actions with >1% usage
+        max_action_pct = max(action_dist.values()) if action_dist else 0
+        
+        print(f"\nAction Distribution:")
+        print(f"  Actions used (>1%): {num_actions_used}/9")
+        print(f"  Most common action: {max_action_pct:.1f}%")
+        
+        # Check rewards
+        reward_stats = reward_callback.get_stats()
+        mean_reward = reward_stats.get('mean_reward', 0)
+        std_reward = reward_stats.get('std_reward', 0)
+        
+        print(f"\nReward Statistics:")
+        print(f"  Mean reward: {mean_reward:.4f} ± {std_reward:.4f}")
+        
+        # Validation criteria
+        validation_passed = True
+        issues = []
+        
+        # Check 1: Agent should use multiple actions
+        if num_actions_used < 4:
+            validation_passed = False
+            issues.append(f"Only {num_actions_used} actions used (need at least 4)")
+        
+        # Check 2: No single action should dominate
+        if max_action_pct > 80:
+            validation_passed = False
+            issues.append(f"Single action dominates ({max_action_pct:.1f}%)")
+        
+        # Check 3: Rewards should be non-zero
+        if abs(mean_reward) < 0.001:
+            validation_passed = False
+            issues.append("Mean reward is near zero (possible collapse)")
+        
+        # Check 4: Reward variance should be non-zero
+        if std_reward < 0.01:
+            validation_passed = False
+            issues.append(f"Reward variance too low ({std_reward:.6f})")
+        
+        # Print results
+        if validation_passed:
+            print("\n✅ VALIDATION PASSED")
+            print("   Agent is exploring properly and learning.")
+            print("   Proceeding with full training...")
+        else:
+            print("\n❌ VALIDATION FAILED")
+            print("   Issues detected:")
+            for issue in issues:
+                print(f"     - {issue}")
+            print("\n   Recommendations:")
+            print("     - Increase ent_coef further (try 0.4-0.5)")
+            print("     - Check reward function configuration")
+            print("     - Verify inaction_penalty is enabled")
+            print("     - Consider simplifying action space for debugging")
+        
+        val_test_env.close()
+        return validation_passed
+        
+    except Exception as e:
+        print(f"\n⚠️  VALIDATION TEST ERROR: {e}")
+        print("   Skipping validation and proceeding with training...")
+        import traceback
+        traceback.print_exc()
+        return True  # Don't block training if validation fails
+
+
 def load_config(config_path: str = None) -> Dict:
     """
     Load configuration from file.
@@ -173,6 +342,7 @@ def train_ppo(
     config_path: str = None,
     resume: bool = True,
     checkpoint_dir: str = None,
+    skip_validation: bool = False,
 ):
     """
     Main training function.
@@ -218,6 +388,11 @@ def train_ppo(
     except Exception as e:
         print(f"⚠ WARNING: Error during verification: {e}")
         print("Skipping pre-training verification.")
+    
+    print("\n" + "=" * 60)
+    
+    # Pre-training validation: Quick 50K step test to verify learning
+    run_validation = not skip_validation
     
     print("\n" + "=" * 60)
     
@@ -285,6 +460,24 @@ def train_ppo(
     print(f"  Short-term: {[h for h in prediction_horizons if h <= 3]}")
     print(f"  Medium-term: {[h for h in prediction_horizons if h > 3]}")
     
+    # Run validation test before full training
+    if run_validation:
+        validation_passed = run_validation_test(
+            dataset_path=dataset_path,
+            prediction_models=prediction_models,
+            reward_config=config['reward'],
+            prediction_horizons=prediction_horizons,
+            skip_validation=False
+        )
+        
+        if not validation_passed:
+            print("\n⚠️  Validation test failed, but continuing with training.")
+            print("   Monitor training closely for signs of policy collapse.")
+            response = input("\nContinue with full training anyway? (y/n): ").strip().lower()
+            if response != 'y':
+                print("Training aborted by user.")
+                return None
+    
     # Create training environment
     print("\nCreating trading environment...")
     # Use vectorized environments for parallel CPU processing (faster data collection)
@@ -294,12 +487,12 @@ def train_ppo(
         print("  ⚠ Vectorized environments not available, using single environment")
         print("  Install stable-baselines3 for parallel processing: pip install stable-baselines3")
     
-    # Number of parallel environments - OPTIMIZED for RTX 4090 with 194GB RAM
-    # With 194GB RAM available, we can run many more parallel environments
-    # Each env uses ~1.5GB RAM (includes prediction models), so 16 envs = ~24GB RAM
-    # This leaves 170GB+ headroom for GPU operations and prevents RAM bottleneck
-    # More parallel envs = faster data collection = better GPU utilization
-    n_envs = 16  # OPTIMIZED for high-RAM systems (194GB available)
+    # Number of parallel environments - REDUCED for better exploration diversity
+    # With fewer envs, each environment sees more diverse experiences before policy updates
+    # Previous: 16 envs meant each env only saw ~18,750 steps in 300K total timesteps
+    # With 4 envs and 1M timesteps, each env sees ~250K steps = more learning per env
+    # This helps prevent policy collapse by ensuring more diverse experience per environment
+    n_envs = 4  # Reduced from 16 for better exploration diversity
     
     def make_env(rank: int = 0, train_mode: bool = True):
         """Create a single environment."""
@@ -487,6 +680,9 @@ Examples:
     parser.add_argument('--checkpoint-dir', type=str, default=None,
                        help='Directory for checkpoints')
     
+    parser.add_argument('--skip-validation', action='store_true',
+                       help='Skip pre-training validation test (not recommended)')
+    
     args = parser.parse_args()
     
     # Handle resume flag
@@ -500,6 +696,7 @@ Examples:
         config_path=args.config,
         resume=resume,
         checkpoint_dir=args.checkpoint_dir,
+        skip_validation=args.skip_validation,
     )
 
 

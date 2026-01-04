@@ -51,6 +51,10 @@ class RewardConfig:
     profit_threshold: float = 0.05  # 5% return threshold
     profit_threshold_bonus: float = 5.0  # Bonus amount when threshold is met
     
+    # Inaction penalty (penalize being flat without opening position)
+    enable_inaction_penalty: bool = False
+    inaction_penalty: float = 0.03  # Penalty for being flat and not trading
+    
     @classmethod
     def from_dict(cls, config: Dict) -> 'RewardConfig':
         """Create config from dictionary."""
@@ -74,6 +78,7 @@ class RewardCalculator:
         self.last_reward_components: Dict[str, float] = {}
         self.reward_history: List[float] = []
         self.component_history: List[Dict[str, float]] = []
+        self.flat_periods: int = 0  # Track consecutive periods with no position
     
     def reset(self, initial_equity: float = 10000.0):
         """Reset state for new episode."""
@@ -83,6 +88,7 @@ class RewardCalculator:
         self.reward_history = []
         self.component_history = []
         self.last_reward_components = {}
+        self.flat_periods = 0
     
     def get_reward_statistics(self) -> Dict[str, float]:
         """
@@ -125,6 +131,7 @@ class RewardCalculator:
         holding_time: int,
         action_valid: bool = True,
         position_changed: bool = False,
+        has_position: bool = False,
         log_components: bool = False,
     ) -> float:
         """
@@ -137,6 +144,7 @@ class RewardCalculator:
             holding_time: How long current position has been held
             action_valid: Whether the action was valid
             position_changed: Whether position was opened/closed
+            has_position: Whether agent currently has a position (not flat)
             log_components: Whether to log reward components for diagnostics
             
         Returns:
@@ -205,6 +213,21 @@ class RewardCalculator:
                     profit_threshold_bonus = self.config.profit_threshold_bonus * bonus_multiplier
                     reward += profit_threshold_bonus
         components['profit_threshold_bonus'] = profit_threshold_bonus
+        
+        # 7. Inaction penalty (penalize being flat without opening position)
+        inaction_penalty_value = 0.0
+        if self.config.enable_inaction_penalty:
+            if not has_position and not position_changed:
+                # Agent is flat and didn't open a position - penalize
+                self.flat_periods += 1
+                # Penalty increases with consecutive flat periods (capped at 50 periods)
+                penalty_ratio = min(self.flat_periods / 50.0, 1.0)
+                inaction_penalty_value = penalty_ratio * self.config.inaction_penalty
+                reward -= inaction_penalty_value
+            else:
+                # Reset flat periods counter if position opened or already has position
+                self.flat_periods = 0
+        components['inaction'] = -inaction_penalty_value
         
         # Update history
         self._update_history(profit_pct, current_equity)

@@ -14,22 +14,16 @@ sequence_length = 60
 # Learning rate - will decay linearly during training
 learning_rate = 0.0003
 learning_rate_final = 0.0001
-# Steps per update (OPTIMIZED for RTX 4090 - balance GPU utilization and sample efficiency)
-# With 12-16 parallel environments, n_steps=1024 means ~64-85 steps per env before training
-# Increased to 1024 for better sample efficiency while maintaining high GPU utilization
-# More parallel envs (12-16) means faster data collection, so we can use more steps
+# Steps per update - REDUCED for more frequent updates
+# Smaller rollouts allow more frequent policy updates, helping exploration
 # NOTE: With vectorized envs, this is total steps across all parallel envs
-n_steps = 1024
-# Batch size (OPTIMIZED for RTX 4090 with 24GB VRAM - target: 90-95% utilization)
-# RTX 4090 has 24GB VRAM, but we need to stay under 24GB to avoid OOM
-# Set to 2048 for safe operation (~16-18GB VRAM usage) - can increase if stable
-# Combined with larger network [1536, 768], this should reach 85-90% GPU usage
-batch_size = 2048
-# Training epochs per update (more epochs = more GPU computation per update)
-# Increased to 20 for MAXIMUM GPU utilization (target: 90-95%)
-# More epochs = more GPU computation per update cycle
-# With larger batch size (2560), more epochs will fully utilize RTX 4090
-n_epochs = 20 
+n_steps = 512
+# Batch size - REDUCED for more frequent updates
+# Smaller batches = more frequent gradient updates = better learning signal
+batch_size = 256
+# Training epochs per update - REDUCED to prevent overfitting
+# Fewer epochs per update prevents overfitting to recent experiences
+n_epochs = 10 
 # Discount factor
 gamma = 0.99
 # GAE lambda
@@ -37,11 +31,12 @@ gae_lambda = 0.95
 # Clipping range
 clip_range = 0.2
 # Entropy coefficient (encourages exploration)
-# Increased from 0.01 to 0.05 to prevent agent from only holding (action 0)
-# Higher entropy encourages exploration of all actions, not just the "safe" hold action
-# NOTE: Will decay linearly from 0.05 to 0.01 during training (implemented in code)
-ent_coef = 0.05
-ent_coef_final = 0.01
+# MUCH HIGHER initial entropy to prevent policy collapse
+# Agent was collapsing to single action (Action 5), so we need aggressive exploration
+# Higher entropy encourages exploration of all actions, not just the "safe" actions
+# NOTE: Will decay linearly from 0.15 to 0.02 during training (implemented in code)
+ent_coef = 0.15
+ent_coef_final = 0.02
 # Value function coefficient
 vf_coef = 0.5
 # Max gradient norm
@@ -78,14 +73,18 @@ reward_clip_value = 10.0
 enable_profit_threshold_bonus = true
 profit_threshold = 0.05
 profit_threshold_bonus = 5.0
+# Inaction penalty (penalize being flat without opening position)
+# CRITICAL: This prevents agent from learning to do nothing
+# Agent was collapsing to actions that do nothing when flat (e.g., Action 5: Sell Medium)
+enable_inaction_penalty = true
+inaction_penalty = 0.03
 
 [TRAINING]
-# Total training timesteps - INCREASED for better learning
-# Previous: 150,000 timesteps = ~10 minutes
-# Increased to 300,000 timesteps = ~20-25 minutes (with optimizations)
-# This gives agent more time to explore and learn complex strategies
-# For even better results, consider 500,000 (35-40 minutes)
-total_timesteps = 300000
+# Total training timesteps - SIGNIFICANTLY INCREASED for better learning
+# Previous: 300,000 timesteps was insufficient - agent collapsed to degenerate policy
+# Increased to 1,000,000 timesteps to give agent enough time to explore and learn
+# With reduced parallel envs (4 instead of 16), each env sees more diverse experiences
+total_timesteps = 1000000
 # Checkpoint frequency (for Colab timeout recovery)
 checkpoint_freq = 50000
 # Evaluation frequency
