@@ -157,7 +157,7 @@ def run_reward_improvement_test(
             return False
         
         action_dist = {k: v/total_actions*100 for k, v in action_stats.items()}
-        buying_actions = [1, 2, 3]  # Buy Small, Medium, Large
+        buying_actions = [1]  # Buy
         buying_action_usage = sum([action_dist.get(a, 0) for a in buying_actions])
         num_actions_used = len([p for p in action_dist.values() if p > 1.0])
         max_action_pct = max(action_dist.values()) if action_dist else 0
@@ -168,9 +168,7 @@ def run_reward_improvement_test(
         print(f"  Buying actions (1-3) total usage: {buying_action_usage:.1f}%")
         for action_id in buying_actions:
             pct = action_dist.get(action_id, 0)
-            action_names = ['Hold', 'Buy Small', 'Buy Medium', 'Buy Large', 
-                          'Sell Small', 'Sell Medium', 'Sell Large', 
-                          'Close Position', 'Reverse Position']
+            action_names = ['Hold', 'Buy', 'Sell', 'Close Position']
             action_name = action_names[action_id] if action_id < len(action_names) else f"Action {action_id}"
             print(f"    {action_name}: {pct:.1f}%")
         

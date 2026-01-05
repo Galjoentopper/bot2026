@@ -176,9 +176,7 @@ def evaluate_ppo_agent(
     
     # Action distribution
     action_counts = {}
-    action_names = ['Hold', 'Buy Small', 'Buy Medium', 'Buy Large', 
-                   'Sell Small', 'Sell Medium', 'Sell Large', 
-                   'Close Position', 'Reverse Position']
+    action_names = ['Hold', 'Buy', 'Sell', 'Close Position']
     for a in range(9):
         count = all_actions.count(a)
         results[f'action_{action_names[a]}_pct'] = count / len(all_actions) * 100 if all_actions else 0

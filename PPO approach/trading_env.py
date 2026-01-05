@@ -30,16 +30,11 @@ class TradingEnv(gym.Env):
     - Technical indicators
     - Portfolio state (position, cash, unrealized P&L)
     
-    Actions (Discrete, 9 options):
+    Actions (Discrete, 4 options):
     - 0: Hold (do nothing)
-    - 1: Buy Small (25% of available cash)
-    - 2: Buy Medium (50% of available cash)
-    - 3: Buy Large (100% of available cash)
-    - 4: Sell Small (25% of position)
-    - 5: Sell Medium (50% of position)
-    - 6: Sell Large (100% of position)
-    - 7: Close Position
-    - 8: Reverse Position (close and open opposite)
+    - 1: Buy (open/increase long position, 100% of available cash)
+    - 2: Sell (reduce/close long position, 100% of position)
+    - 3: Close Position (fully close any position)
     """
     
     metadata = {'render_modes': ['human', 'ansi']}
@@ -126,15 +121,17 @@ class TradingEnv(gym.Env):
         self.episode_length = 0  # Track episode length
         
         # Define action and observation spaces
-        self.action_space = spaces.Discrete(9)
+        self.action_space = spaces.Discrete(4)
         
         # Observation space components:
         # - Prediction features: 
         #   * Single-step (5): class_normalized, confidence, prob_fall, prob_stationary, prob_rise
         #   * Multi-horizon: 5 + (len(horizons)-1) * 4 per additional horizon
         #     Each horizon adds: class_norm, confidence, prob_fall, prob_rise
-        # - Price features (5): price_normalized, price_change, volume_normalized, rsi, macd
+        # - Price features (8): price_normalized, price_change, volume_normalized, rsi, macd, atr, stoch_k, stoch_d
+        # - Temporal features (9): price_momentum[5,10,20], volume_momentum[5,10,20], volatility[5,10,20]
         # - Portfolio state (4): position_normalized, unrealized_pnl, cash_ratio, holding_time_normalized
+        # - Action mask (4): can_hold, can_buy, can_sell, can_close
         
         # Calculate prediction feature dimension
         if self.use_predictions and len(self.prediction_horizons) > 0:
@@ -144,7 +141,11 @@ class TradingEnv(gym.Env):
         else:
             pred_dim = 5  # Default features even without model
         
-        self.observation_dim = pred_dim + 5 + 4  # pred + price + portfolio
+        # Price features: 8 (added ATR, stoch_k, stoch_d)
+        # Temporal features: 9 (3 lookbacks * 3 features each)
+        # Portfolio: 4
+        # Action mask: 4
+        self.observation_dim = pred_dim + 8 + 9 + 4 + 4  # pred + price + temporal + portfolio + action_mask
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -262,6 +263,25 @@ class TradingEnv(gym.Env):
         vol_ma = df['volume'].rolling(window=20, min_periods=1).mean()
         result['volume_ratio'] = df['volume'] / (vol_ma + 1e-10)
         
+        # ATR (Average True Range) - 14 period
+        high_low = df['high'] - df['low']
+        high_close = np.abs(df['high'] - df['close'].shift())
+        low_close = np.abs(df['low'] - df['close'].shift())
+        true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        result['atr'] = true_range.rolling(window=14, min_periods=1).mean() / df['close']  # Normalize
+        
+        # Stochastic Oscillator (%K, %D) - 14 period
+        low_14 = df['low'].rolling(window=14, min_periods=1).min()
+        high_14 = df['high'].rolling(window=14, min_periods=1).max()
+        result['stoch_k'] = 100 * (df['close'] - low_14) / (high_14 - low_14 + 1e-10)
+        result['stoch_d'] = result['stoch_k'].rolling(window=3, min_periods=1).mean()
+        # Normalize to 0-1
+        result['stoch_k'] = result['stoch_k'] / 100.0
+        result['stoch_d'] = result['stoch_d'] / 100.0
+        
+        # Price acceleration (rate of change of price_change)
+        result['price_acceleration'] = result['price_change'].diff().fillna(0)
+        
         return result
     
     def _get_prediction_features(self) -> np.ndarray:
@@ -320,13 +340,13 @@ class TradingEnv(gym.Env):
                 return np.array([0.5, 0.33, 0.33, 0.34, 0.33])
     
     def _get_observation(self) -> np.ndarray:
-        """Construct observation vector."""
+        """Construct observation vector with enhanced features."""
         idx = self.episode_start_idx + self.current_step
         
-        # Prediction features (5)
+        # Prediction features
         pred_features = self._get_prediction_features()
         
-        # Price features (5)
+        # Price features (8)
         current_price = self.prices[idx]
         price_normalized = (current_price - self.price_mean) / self.price_std
         
@@ -342,6 +362,9 @@ class TradingEnv(gym.Env):
         
         rsi = self.df['rsi'].iloc[idx] if 'rsi' in self.df.columns else 0.5
         macd = self.df['macd'].iloc[idx] if 'macd' in self.df.columns else 0.0
+        atr = self.df['atr'].iloc[idx] if 'atr' in self.df.columns else 0.0
+        stoch_k = self.df['stoch_k'].iloc[idx] if 'stoch_k' in self.df.columns else 0.5
+        stoch_d = self.df['stoch_d'].iloc[idx] if 'stoch_d' in self.df.columns else 0.5
         
         price_features = np.array([
             price_normalized,
@@ -349,7 +372,39 @@ class TradingEnv(gym.Env):
             np.clip(volume_normalized, -5, 5),  # Clip outliers
             rsi,
             np.clip(macd * 100, -1, 1),  # Scale and clip
+            np.clip(atr * 100, 0, 1),  # ATR normalized
+            stoch_k,
+            stoch_d,
         ])
+        
+        # Temporal features (9): momentum and volatility for lookbacks [5, 10, 20]
+        lookbacks = [5, 10, 20]
+        temporal_features = []
+        for lookback in lookbacks:
+            if idx >= lookback:
+                # Price momentum
+                price_momentum = (current_price - self.prices[idx - lookback]) / (self.prices[idx - lookback] + 1e-10)
+                price_momentum = np.clip(price_momentum, -0.9, 10.0)
+                
+                # Volume momentum
+                vol_window = self.df['volume'].iloc[idx - lookback:idx]
+                vol_mean = vol_window.mean() if len(vol_window) > 0 else volume
+                volume_momentum = (volume - vol_mean) / (vol_mean + 1e-10) if vol_mean > 0 else 0.0
+                volume_momentum = np.clip(volume_momentum, -5, 5)
+                
+                # Volatility (rolling std of returns)
+                price_window = self.df['close'].iloc[idx - lookback:idx + 1]
+                returns = price_window.pct_change().dropna()
+                volatility = returns.std() if len(returns) > 0 else 0.0
+                volatility = np.clip(volatility, 0, 1.0)
+            else:
+                price_momentum = 0.0
+                volume_momentum = 0.0
+                volatility = 0.0
+            
+            temporal_features.extend([price_momentum, volume_momentum, volatility])
+        
+        temporal_features = np.array(temporal_features)
         
         # Portfolio state (4)
         total_equity = self.portfolio.state.total_equity
@@ -368,10 +423,47 @@ class TradingEnv(gym.Env):
             holding_time_normalized,
         ])
         
+        # Action mask (4): can_hold, can_buy, can_sell, can_close
+        action_mask = np.array([
+            1.0,  # Hold is always valid
+            1.0 if cash > 0 else 0.0,  # Can buy if have cash
+            1.0 if position > 0 else 0.0,  # Can sell if have position
+            1.0 if position != 0 else 0.0,  # Can close if have position
+        ])
+        
         # Combine all features
-        observation = np.concatenate([pred_features, price_features, portfolio_features])
+        observation = np.concatenate([
+            pred_features, 
+            price_features, 
+            temporal_features, 
+            portfolio_features,
+            action_mask
+        ])
         
         return observation.astype(np.float32)
+    
+    def _is_action_valid(self, action: int) -> bool:
+        """
+        Check if action is valid given current portfolio state.
+        
+        Args:
+            action: Action to check (0-3)
+            
+        Returns:
+            True if action is valid, False otherwise
+        """
+        position = self.portfolio.state.position
+        cash = self.portfolio.state.cash
+        
+        if action == 0:  # Hold - always valid
+            return True
+        elif action == 1:  # Buy - need cash
+            return cash > 0
+        elif action == 2:  # Sell - need position
+            return position > 0
+        elif action == 3:  # Close - need position
+            return position != 0
+        return False
     
     def _execute_action(self, action: int) -> Tuple[float, float, bool]:
         """
@@ -393,58 +485,21 @@ class TradingEnv(gym.Env):
         if action == 0:  # Hold
             pass
         
-        elif action == 1:  # Buy Small (25%)
-            if cash > 0:
-                cost = self.portfolio.open_position(current_price, 0.25, 'long', self.current_step)
-                position_changed = True
-        
-        elif action == 2:  # Buy Medium (50%)
-            if cash > 0:
-                cost = self.portfolio.open_position(current_price, 0.5, 'long', self.current_step)
-                position_changed = True
-        
-        elif action == 3:  # Buy Large (100%)
+        elif action == 1:  # Buy (100% of available cash)
             if cash > 0:
                 cost = self.portfolio.open_position(current_price, 1.0, 'long', self.current_step)
                 position_changed = True
         
-        elif action == 4:  # Sell Small (25%)
-            if position != 0:
-                pnl, cost = self.portfolio.reduce_position(current_price, 0.25, self.current_step)
-                profit_pct = pnl / self.initial_capital if self.initial_capital > 0 else 0
-                position_changed = True
-        
-        elif action == 5:  # Sell Medium (50%)
-            if position != 0:
-                pnl, cost = self.portfolio.reduce_position(current_price, 0.5, self.current_step)
-                profit_pct = pnl / self.initial_capital if self.initial_capital > 0 else 0
-                position_changed = True
-        
-        elif action == 6:  # Sell Large (100%)
-            if position != 0:
+        elif action == 2:  # Sell (100% of position)
+            if position > 0:
                 pnl, cost = self.portfolio.close_position(current_price, self.current_step)
                 profit_pct = pnl / self.initial_capital if self.initial_capital > 0 else 0
                 position_changed = True
         
-        elif action == 7:  # Close Position
+        elif action == 3:  # Close Position
             if position != 0:
                 pnl, cost = self.portfolio.close_position(current_price, self.current_step)
                 profit_pct = pnl / self.initial_capital if self.initial_capital > 0 else 0
-                position_changed = True
-        
-        elif action == 8:  # Reverse Position
-            if position != 0:
-                # Close current position
-                pnl, close_cost = self.portfolio.close_position(current_price, self.current_step)
-                profit_pct = pnl / self.initial_capital if self.initial_capital > 0 else 0
-                
-                # Open opposite position
-                if position > 0:
-                    open_cost = self.portfolio.open_position(current_price, 1.0, 'short', self.current_step)
-                else:
-                    open_cost = self.portfolio.open_position(current_price, 1.0, 'long', self.current_step)
-                
-                cost = close_cost + open_cost
                 position_changed = True
         
         # Update portfolio with current price
@@ -509,7 +564,7 @@ class TradingEnv(gym.Env):
         Take a step in the environment.
         
         Args:
-            action: Action to take (0-8)
+            action: Action to take (0-3)
             
         Returns:
             Tuple of (observation, reward, terminated, truncated, info)
@@ -517,11 +572,20 @@ class TradingEnv(gym.Env):
         if self.done:
             raise RuntimeError("Episode has ended. Call reset().")
         
+        # Validate action (action masking)
+        action_valid = self._is_action_valid(action)
+        
         # Track position state before action execution
         has_position_before = (self.portfolio.state.position != 0)
         
-        # Execute action
-        profit_pct, transaction_cost, position_changed = self._execute_action(action)
+        # Execute action (only if valid)
+        if action_valid:
+            profit_pct, transaction_cost, position_changed = self._execute_action(action)
+        else:
+            # Invalid action: no execution, no cost, no position change
+            profit_pct = 0.0
+            transaction_cost = 0.0
+            position_changed = False
         
         # Calculate reward
         current_equity = self.portfolio.state.total_equity
@@ -554,6 +618,7 @@ class TradingEnv(gym.Env):
             transaction_cost=transaction_cost,
             current_equity=current_equity,
             holding_time=self.portfolio.holding_time,
+            action_valid=action_valid,  # Pass action validity
             position_changed=position_changed,
             has_position=has_position_after,
             is_opening_position=is_opening_position,
@@ -605,6 +670,7 @@ class TradingEnv(gym.Env):
             'num_trades': len(self.portfolio.trades),
             'profit_pct': profit_pct,
             'action': action,
+            'action_valid': action_valid,  # Add action validity to info
         }
         
         # Add episode info when episode ends (for stable-baselines3 EvalCallback)

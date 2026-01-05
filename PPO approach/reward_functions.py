@@ -20,14 +20,14 @@ from dataclasses import dataclass
 class RewardConfig:
     """Configuration for reward calculation."""
     # Profit scaling
-    profit_scale: float = 100.0
+    profit_scale: float = 500.0  # Increased from 250 to make profits more attractive
     
     # Transaction cost handling
     cost_scale: float = 1.0
     transaction_cost: float = 0.0025  # 0.25%
     
     # Risk penalties
-    drawdown_penalty: float = 0.1
+    drawdown_penalty: float = 0.02  # Reduced from 0.05 to be less aggressive
     max_drawdown_threshold: float = 0.1  # 10%
     
     # Sharpe bonus
@@ -44,23 +44,26 @@ class RewardConfig:
     
     # Reward clipping
     clip_reward: bool = True
-    reward_clip_value: float = 10.0
+    reward_clip_value: float = 30.0  # Increased from 20.0 to allow larger positive rewards
+    
+    # Minimum reward floor (prevent extreme negatives)
+    min_reward_floor: float = -0.1  # Clip rewards below this value
     
     # Profit threshold bonus (reward for achieving positive returns)
     enable_profit_threshold_bonus: bool = True
     profit_threshold: float = 0.05  # 5% return threshold
-    profit_threshold_bonus: float = 5.0  # Bonus amount when threshold is met
+    profit_threshold_bonus: float = 10.0  # Increased from 5.0 for stronger positive signal
     
     # Inaction penalty (penalize being flat without opening position)
     enable_inaction_penalty: bool = False
     inaction_penalty: float = 0.03  # Penalty for being flat and not trading
     
     # Action-specific bonuses (to encourage buying actions)
-    buy_action_bonus: float = 0.75  # Bonus for buying actions (1-3)
-    sell_action_bonus: float = 0.25  # Bonus for selling actions (4-8)
+    buy_action_bonus: float = 2.0  # Increased from 1.5 for stronger incentive to trade
+    sell_action_bonus: float = 0.25  # Bonus for selling actions
     
     # Transaction cost handling for opening positions
-    open_position_cost_ratio: float = 0.5  # Fraction of transaction cost to apply when opening (0.5 = 50%)
+    open_position_cost_ratio: float = 0.3  # Reduced from 0.5 to less penalty when opening
     
     @classmethod
     def from_dict(cls, config: Dict) -> 'RewardConfig':
@@ -140,7 +143,7 @@ class RewardCalculator:
         position_changed: bool = False,
         has_position: bool = False,
         is_opening_position: bool = False,
-        action_type: int = -1,  # -1 = unknown, 0-8 = action index
+        action_type: int = -1,  # -1 = unknown, 0-3 = action index
         log_components: bool = False,
     ) -> float:
         """
@@ -155,7 +158,7 @@ class RewardCalculator:
             position_changed: Whether position was opened/closed
             has_position: Whether agent currently has a position (not flat)
             is_opening_position: Whether this action opened a new position
-            action_type: Action index (0-8), used to determine buy vs sell bonus
+            action_type: Action index (0-3), used to determine buy vs sell bonus
             log_components: Whether to log reward components for diagnostics
             
         Returns:
@@ -183,7 +186,7 @@ class RewardCalculator:
                 reward -= cost_penalty
                 components['cost'] = -cost_penalty
                 # Larger bonus for buying actions to encourage exploration
-                if action_type in [1, 2, 3]:  # Buy Small, Medium, Large
+                if action_type == 1:  # Buy
                     action_bonus = self.config.buy_action_bonus
                 else:
                     action_bonus = self.config.sell_action_bonus
@@ -252,6 +255,11 @@ class RewardCalculator:
         
         # Update history
         self._update_history(profit_pct, current_equity)
+        
+        # Apply minimum reward floor (prevent extreme negatives)
+        if reward < self.config.min_reward_floor:
+            reward = self.config.min_reward_floor
+            components['floor_applied'] = self.config.min_reward_floor - reward
         
         # Clip reward if configured
         original_reward = reward

@@ -32,10 +32,13 @@ gae_lambda = 0.95
 clip_range = 0.2
 # Entropy coefficient (encourages exploration)
 # MUCH HIGHER initial entropy to prevent policy collapse
-# Agent was collapsing to single action (Action 5), so we need aggressive exploration
+# Agent was collapsing to single action, so we need aggressive exploration
 # Higher entropy encourages exploration of all actions, not just the "safe" actions
-# NOTE: Will decay linearly from 0.15 to 0.02 during training (implemented in code)
-ent_coef = 0.15
+# NOTE: Two-phase decay schedule (implemented in code):
+#   Phase 1 (0-50% training): 0.25 → 0.10 (fast initial decay)
+#   Phase 2 (50-100% training): 0.10 → 0.02 (slow final decay)
+# This keeps high exploration for longer, preventing early collapse
+ent_coef = 0.25
 ent_coef_final = 0.02
 # Value function coefficient
 vf_coef = 0.5
@@ -43,15 +46,15 @@ vf_coef = 0.5
 max_grad_norm = 0.5
 
 [REWARD]
-# Scale factor for profit (increased from 100 to 250 to make profits more attractive)
+# Scale factor for profit (increased from 250 to 500 to make profits more attractive)
 # Higher profit_scale encourages the agent to take trades that generate profit
 # This helps prevent the agent from learning to only hold (action 0)
-# Increased to 250 to make profitable trades 2.5x more rewarding relative to costs
-profit_scale = 250
+# Increased to 500 to ensure profitable trades always yield positive rewards
+profit_scale = 500
 # Transaction cost penalty scale
 cost_scale = 1.0
-# Drawdown penalty weight (reduced from 0.1 to be less aggressive)
-drawdown_penalty = 0.05
+# Drawdown penalty weight (reduced from 0.05 to 0.02 to be less aggressive)
+drawdown_penalty = 0.02
 # Max drawdown threshold before increased penalty
 max_drawdown_threshold = 0.1
 # Sharpe ratio bonus weight (increased from 0.5 to encourage better risk-adjusted returns)
@@ -67,29 +70,31 @@ hold_penalty = 0.01
 max_hold_periods = 100
 # Invalid action penalty
 invalid_action_penalty = -1.0
-# Clip reward values (increased from 10.0 to 20.0 to allow larger positive rewards)
+# Clip reward values (increased from 20.0 to 30.0 to allow larger positive rewards)
 clip_reward = true
-reward_clip_value = 20.0
+reward_clip_value = 30.0
+# Minimum reward floor (prevent extreme negatives)
+min_reward_floor = -0.1
 # Profit threshold bonus (reward for achieving positive returns)
 enable_profit_threshold_bonus = true
 profit_threshold = 0.05
-profit_threshold_bonus = 5.0
+profit_threshold_bonus = 10.0
 # Inaction penalty (penalize being flat without opening position)
 # CRITICAL: This prevents agent from learning to do nothing
-# Agent was collapsing to actions that do nothing when flat (e.g., Action 5: Sell Medium)
+# Agent was collapsing to actions that do nothing when flat
 enable_inaction_penalty = true
 inaction_penalty = 0.03
 # Action-specific bonuses (to encourage buying actions)
-# Buy action bonus: Larger bonus for buying actions (1-3) to encourage exploration
-# Increased to 1.5 to more strongly encourage buying actions
-buy_action_bonus = 1.5
-# Sell action bonus: Standard bonus for selling/closing actions (4-8)
+# Buy action bonus: Larger bonus for buying actions to encourage exploration
+# Increased to 2.0 to more strongly encourage buying actions
+buy_action_bonus = 2.0
+# Sell action bonus: Standard bonus for selling/closing actions
 sell_action_bonus = 0.25
 # Transaction cost handling for opening positions
-# Only apply 50% of transaction cost penalty when opening positions
+# Only apply 30% of transaction cost penalty when opening positions (reduced from 50%)
 # Full cost penalty is applied when closing positions
 # This addresses credit assignment problem: opening positions no longer get immediate full penalty
-open_position_cost_ratio = 0.5
+open_position_cost_ratio = 0.3
 
 [TRAINING]
 # Total training timesteps - SIGNIFICANTLY INCREASED for better learning

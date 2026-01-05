@@ -52,7 +52,7 @@ DEFAULT_PPO_CONFIG = {
     'gamma': 0.99,
     'gae_lambda': 0.95,
     'clip_range': 0.2,
-    'ent_coef': 0.01,
+    'ent_coef': 0.25,  # Increased default for better exploration
     'vf_coef': 0.5,
     'max_grad_norm': 0.5,
     'verbose': 1,
@@ -85,13 +85,20 @@ class LearningRateScheduleCallback(BaseCallback):
 
 
 class EntropyDecayCallback(BaseCallback):
-    """Callback to decay entropy coefficient linearly during training."""
+    """Callback to decay entropy coefficient with two-phase schedule during training.
+    
+    Two-phase decay keeps high exploration for longer:
+    - Phase 1 (0-50%): Fast decay from initial to intermediate value
+    - Phase 2 (50-100%): Slow decay from intermediate to final value
+    """
     
     def __init__(self, initial_ent_coef: float, final_ent_coef: float, total_timesteps: int, verbose: int = 0):
         super().__init__(verbose)
         self.initial_ent_coef = initial_ent_coef
         self.final_ent_coef = final_ent_coef
         self.total_timesteps = total_timesteps
+        # Intermediate value for two-phase decay (midpoint between initial and final)
+        self.intermediate_ent_coef = initial_ent_coef * 0.4  # 40% of initial (e.g., 0.25 * 0.4 = 0.10)
     
     def _on_step(self) -> bool:
         if self.model is None:
@@ -100,8 +107,15 @@ class EntropyDecayCallback(BaseCallback):
         # Calculate progress (0.0 to 1.0)
         progress = min(1.0, self.num_timesteps / self.total_timesteps)
         
-        # Linear decay
-        current_ent_coef = self.initial_ent_coef + (self.final_ent_coef - self.initial_ent_coef) * progress
+        # Two-phase decay schedule
+        if progress < 0.5:
+            # Phase 1: Fast decay from initial to intermediate (0-50% of training)
+            phase1_progress = progress / 0.5  # 0.0 to 1.0 within phase 1
+            current_ent_coef = self.initial_ent_coef + (self.intermediate_ent_coef - self.initial_ent_coef) * phase1_progress
+        else:
+            # Phase 2: Slow decay from intermediate to final (50-100% of training)
+            phase2_progress = (progress - 0.5) / 0.5  # 0.0 to 1.0 within phase 2
+            current_ent_coef = self.intermediate_ent_coef + (self.final_ent_coef - self.intermediate_ent_coef) * phase2_progress
         
         # Update entropy coefficient
         self.model.ent_coef = current_ent_coef
@@ -163,9 +177,7 @@ class PolicyCollapseCallback(BaseCallback):
             max_action_id, max_action_pct = max_action
             
             if max_action_pct > self.threshold:
-                action_names = ['Hold', 'Buy Small', 'Buy Medium', 'Buy Large', 
-                              'Sell Small', 'Sell Medium', 'Sell Large', 
-                              'Close Position', 'Reverse Position']
+                action_names = ['Hold', 'Buy', 'Sell', 'Close Position']
                 action_name = action_names[max_action_id] if max_action_id < len(action_names) else f"Action {max_action_id}"
                 
                 if self.verbose > 0:
@@ -178,9 +190,7 @@ class PolicyCollapseCallback(BaseCallback):
             # Log action distribution even if not collapsed
             elif self.verbose > 0 and self.num_timesteps % (self.check_freq * 5) == 0:
                 # Log every 5 checks (50K steps) for monitoring
-                action_names = ['Hold', 'Buy Small', 'Buy Medium', 'Buy Large', 
-                              'Sell Small', 'Sell Medium', 'Sell Large', 
-                              'Close Position', 'Reverse Position']
+                action_names = ['Hold', 'Buy', 'Sell', 'Close Position']
                 print(f"\n📊 Action Distribution @ {self.num_timesteps} steps:")
                 for action_id, pct in sorted(action_dist.items()):
                     action_name = action_names[action_id] if action_id < len(action_names) else f"Action {action_id}"
@@ -479,7 +489,7 @@ def create_ppo_agent(
     gamma = config.get('gamma', 0.99)
     gae_lambda = config.get('gae_lambda', 0.95)
     clip_range = config.get('clip_range', 0.2)
-    ent_coef = config.get('ent_coef', 0.15)  # Updated default to match config (much higher for exploration)
+    ent_coef = config.get('ent_coef', 0.25)  # Updated default to match config (much higher for exploration)
     vf_coef = config.get('vf_coef', 0.5)
     max_grad_norm = config.get('max_grad_norm', 0.5)
     verbose = config.get('verbose', 1)
