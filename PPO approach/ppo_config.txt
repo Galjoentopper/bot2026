@@ -12,8 +12,9 @@ sequence_length = 60
 
 [PPO]
 # Learning rate - will decay linearly during training
+# Less aggressive decay to maintain learning capacity longer
 learning_rate = 0.0003
-learning_rate_final = 0.0001
+learning_rate_final = 0.00015
 # Steps per update - REDUCED for more frequent updates
 # Smaller rollouts allow more frequent policy updates, helping exploration
 # NOTE: With vectorized envs, this is total steps across all parallel envs
@@ -24,26 +25,35 @@ batch_size = 256
 # Training epochs per update - REDUCED to prevent overfitting
 # Fewer epochs per update prevents overfitting to recent experiences
 n_epochs = 10 
-# Discount factor
-gamma = 0.99
-# GAE lambda
-gae_lambda = 0.95
-# Clipping range
-clip_range = 0.2
+# Discount factor - INCREASED for faster credit assignment in trading
+# Higher gamma helps agent learn faster in trading environment
+gamma = 0.995
+# GAE lambda - INCREASED for less variance in advantage estimates
+# Higher lambda reduces variance and improves stability
+gae_lambda = 0.98
+# Clipping range - INCREASED for larger policy updates initially
+# Wider clipping allows more exploration early in training
+# Will decay to clip_range_final during training
+clip_range = 0.3
+clip_range_final = 0.2
+# Clip range will decay to 0.2 during training (if clip_range_final is set)
 # Entropy coefficient (encourages exploration)
 # MUCH HIGHER initial entropy to prevent policy collapse
 # Agent was collapsing to single action, so we need aggressive exploration
 # Higher entropy encourages exploration of all actions, not just the "safe" actions
-# NOTE: Two-phase decay schedule (implemented in code):
-#   Phase 1 (0-50% training): 0.25 → 0.10 (fast initial decay)
-#   Phase 2 (50-100% training): 0.10 → 0.02 (slow final decay)
-# This keeps high exploration for longer, preventing early collapse
-ent_coef = 0.25
-ent_coef_final = 0.02
-# Value function coefficient
-vf_coef = 0.5
-# Max gradient norm
-max_grad_norm = 0.5
+# NOTE: Three-phase decay schedule (implemented in code):
+#   Phase 1 (0-70% training): 0.3 → 0.15 (slow decay, maintain high exploration)
+#   Phase 2 (70-90% training): 0.15 → 0.08 (moderate decay)
+#   Phase 3 (90-100% training): 0.08 → 0.05 (final decay)
+# This keeps high exploration for 70% of training, preventing early collapse
+ent_coef = 0.3
+ent_coef_final = 0.05
+# Value function coefficient - INCREASED for better value estimation
+# Higher vf_coef improves value function learning and stability
+vf_coef = 0.6
+# Max gradient norm - INCREASED to allow larger gradient updates
+# Higher max_grad_norm allows more aggressive learning while still preventing explosions
+max_grad_norm = 0.8
 
 [REWARD]
 # Scale factor for profit (increased from 250 to 500 to make profits more attractive)
@@ -63,11 +73,11 @@ sharpe_bonus = 1.5
 min_periods_for_sharpe = 10
 # Enable hold penalty (discourage excessive holding) - now enabled
 enable_hold_penalty = true
-# Hold penalty weight (if enabled) - increased from 0.005 to 0.01
+# Hold penalty weight (if enabled) - SIGNIFICANTLY INCREASED to prevent policy collapse
 # Higher hold penalty discourages excessive holding and encourages trading activity
-hold_penalty = 0.01
-# Max hold periods before penalty kicks in
-max_hold_periods = 100
+hold_penalty = 0.05
+# Max hold periods before penalty kicks in - REDUCED to trigger penalty sooner
+max_hold_periods = 50
 # Invalid action penalty
 invalid_action_penalty = -1.0
 # Clip reward values (increased from 20.0 to 30.0 to allow larger positive rewards)
@@ -82,19 +92,21 @@ profit_threshold_bonus = 10.0
 # Inaction penalty (penalize being flat without opening position)
 # CRITICAL: This prevents agent from learning to do nothing
 # Agent was collapsing to actions that do nothing when flat
+# SIGNIFICANTLY INCREASED to strongly discourage inaction
 enable_inaction_penalty = true
-inaction_penalty = 0.03
+inaction_penalty = 0.1
 # Action-specific bonuses (to encourage buying actions)
-# Buy action bonus: Larger bonus for buying actions to encourage exploration
-# Increased to 2.0 to more strongly encourage buying actions
-buy_action_bonus = 2.0
-# Sell action bonus: Standard bonus for selling/closing actions
-sell_action_bonus = 0.25
+# Buy action bonus: SIGNIFICANTLY INCREASED to strongly encourage trading
+# Increased to 5.0 to more strongly encourage buying actions and prevent policy collapse
+buy_action_bonus = 5.0
+# Sell action bonus: INCREASED to encourage selling/closing actions
+sell_action_bonus = 1.0
 # Transaction cost handling for opening positions
-# Only apply 30% of transaction cost penalty when opening positions (reduced from 50%)
+# Only apply 20% of transaction cost penalty when opening positions (reduced from 30%)
 # Full cost penalty is applied when closing positions
 # This addresses credit assignment problem: opening positions no longer get immediate full penalty
-open_position_cost_ratio = 0.3
+# Further reduced to encourage more trading activity
+open_position_cost_ratio = 0.2
 
 [TRAINING]
 # Total training timesteps - SIGNIFICANTLY INCREASED for better learning
@@ -104,8 +116,9 @@ open_position_cost_ratio = 0.3
 total_timesteps = 1000000
 # Checkpoint frequency (for Colab timeout recovery)
 checkpoint_freq = 50000
-# Evaluation frequency
-eval_freq = 10000
+# Evaluation frequency - MORE FREQUENT to catch issues earlier
+# More frequent evaluation helps detect policy collapse and training issues sooner
+eval_freq = 5000
 # Number of evaluation episodes - INCREASED for more reliable estimates
 n_eval_episodes = 10
 # Train/test split - updated to 0.6 for three-way split (60/20/20)

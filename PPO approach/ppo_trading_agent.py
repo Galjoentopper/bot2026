@@ -85,11 +85,12 @@ class LearningRateScheduleCallback(BaseCallback):
 
 
 class EntropyDecayCallback(BaseCallback):
-    """Callback to decay entropy coefficient with two-phase schedule during training.
+    """Callback to decay entropy coefficient with three-phase schedule during training.
     
-    Two-phase decay keeps high exploration for longer:
-    - Phase 1 (0-50%): Fast decay from initial to intermediate value
-    - Phase 2 (50-100%): Slow decay from intermediate to final value
+    Three-phase decay keeps high exploration for longer:
+    - Phase 1 (0-70%): Slow decay from initial to intermediate value (maintains high exploration)
+    - Phase 2 (70-90%): Moderate decay from intermediate to lower value
+    - Phase 3 (90-100%): Final decay to target value
     """
     
     def __init__(self, initial_ent_coef: float, final_ent_coef: float, total_timesteps: int, verbose: int = 0):
@@ -97,8 +98,11 @@ class EntropyDecayCallback(BaseCallback):
         self.initial_ent_coef = initial_ent_coef
         self.final_ent_coef = final_ent_coef
         self.total_timesteps = total_timesteps
-        # Intermediate value for two-phase decay (midpoint between initial and final)
-        self.intermediate_ent_coef = initial_ent_coef * 0.4  # 40% of initial (e.g., 0.25 * 0.4 = 0.10)
+        # Intermediate values for three-phase decay
+        # Phase 1 end (70%): 50% of initial (e.g., 0.3 * 0.5 = 0.15)
+        self.phase1_end_ent_coef = initial_ent_coef * 0.5
+        # Phase 2 end (90%): midpoint between phase1_end and final
+        self.phase2_end_ent_coef = (self.phase1_end_ent_coef + final_ent_coef) * 0.5
     
     def _on_step(self) -> bool:
         if self.model is None:
@@ -107,18 +111,52 @@ class EntropyDecayCallback(BaseCallback):
         # Calculate progress (0.0 to 1.0)
         progress = min(1.0, self.num_timesteps / self.total_timesteps)
         
-        # Two-phase decay schedule
-        if progress < 0.5:
-            # Phase 1: Fast decay from initial to intermediate (0-50% of training)
-            phase1_progress = progress / 0.5  # 0.0 to 1.0 within phase 1
-            current_ent_coef = self.initial_ent_coef + (self.intermediate_ent_coef - self.initial_ent_coef) * phase1_progress
+        # Three-phase decay schedule
+        if progress < 0.7:
+            # Phase 1: Slow decay from initial to phase1_end (0-70% of training)
+            # Keeps high exploration for majority of training
+            phase1_progress = progress / 0.7  # 0.0 to 1.0 within phase 1
+            current_ent_coef = self.initial_ent_coef + (self.phase1_end_ent_coef - self.initial_ent_coef) * phase1_progress
+        elif progress < 0.9:
+            # Phase 2: Moderate decay from phase1_end to phase2_end (70-90% of training)
+            phase2_progress = (progress - 0.7) / 0.2  # 0.0 to 1.0 within phase 2
+            current_ent_coef = self.phase1_end_ent_coef + (self.phase2_end_ent_coef - self.phase1_end_ent_coef) * phase2_progress
         else:
-            # Phase 2: Slow decay from intermediate to final (50-100% of training)
-            phase2_progress = (progress - 0.5) / 0.5  # 0.0 to 1.0 within phase 2
-            current_ent_coef = self.intermediate_ent_coef + (self.final_ent_coef - self.intermediate_ent_coef) * phase2_progress
+            # Phase 3: Final decay from phase2_end to final (90-100% of training)
+            phase3_progress = (progress - 0.9) / 0.1  # 0.0 to 1.0 within phase 3
+            current_ent_coef = self.phase2_end_ent_coef + (self.final_ent_coef - self.phase2_end_ent_coef) * phase3_progress
         
         # Update entropy coefficient
         self.model.ent_coef = current_ent_coef
+        
+        return True
+
+
+class ClipRangeDecayCallback(BaseCallback):
+    """Callback to decay clip range linearly during training.
+    
+    Starting with wider clipping allows larger policy updates early in training,
+    then narrowing for stability as training progresses.
+    """
+    
+    def __init__(self, initial_clip_range: float, final_clip_range: float, total_timesteps: int, verbose: int = 0):
+        super().__init__(verbose)
+        self.initial_clip_range = initial_clip_range
+        self.final_clip_range = final_clip_range
+        self.total_timesteps = total_timesteps
+    
+    def _on_step(self) -> bool:
+        if self.model is None:
+            return True
+        
+        # Calculate progress (0.0 to 1.0)
+        progress = min(1.0, self.num_timesteps / self.total_timesteps)
+        
+        # Linear decay from initial to final
+        current_clip_range = self.initial_clip_range + (self.final_clip_range - self.initial_clip_range) * progress
+        
+        # Update clip range
+        self.model.clip_range = current_clip_range
         
         return True
 
@@ -437,7 +475,7 @@ def load_ppo_config(config_path: str = None) -> Dict:
             for key in parser['PPO']:
                 value = parser['PPO'][key]
                 # Convert to appropriate type
-                if key in ['learning_rate', 'gamma', 'gae_lambda', 'clip_range', 
+                if key in ['learning_rate', 'gamma', 'gae_lambda', 'clip_range', 'clip_range_final',
                           'ent_coef', 'vf_coef', 'max_grad_norm']:
                     config[key] = float(value)
                 elif key in ['n_steps', 'batch_size', 'n_epochs', 'verbose']:
@@ -752,6 +790,19 @@ def train_with_checkpoints(
         )
         callbacks.append(ent_callback)
         print(f"🔍 Entropy decay schedule: {initial_ent:.4f} → {final_ent:.4f}")
+    
+    # Clip range decay callback (if configured)
+    if ppo_config and 'clip_range_final' in ppo_config:
+        initial_clip = ppo_config.get('clip_range', 0.2)
+        final_clip = ppo_config.get('clip_range_final', 0.2)
+        clip_callback = ClipRangeDecayCallback(
+            initial_clip_range=initial_clip,
+            final_clip_range=final_clip,
+            total_timesteps=total_timesteps,
+            verbose=0
+        )
+        callbacks.append(clip_callback)
+        print(f"📐 Clip range decay schedule: {initial_clip:.4f} → {final_clip:.4f}")
     
     # Calculate remaining timesteps
     remaining_timesteps = total_timesteps - start_timesteps

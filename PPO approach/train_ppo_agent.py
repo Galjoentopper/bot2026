@@ -552,7 +552,7 @@ def load_config(config_path: str = None) -> Dict:
             for key in parser['PPO']:
                 value = parser['PPO'][key]
                 if key in ['learning_rate', 'learning_rate_final', 'gamma', 'gae_lambda', 'clip_range', 
-                          'ent_coef', 'ent_coef_final', 'vf_coef', 'max_grad_norm']:
+                          'clip_range_final', 'ent_coef', 'ent_coef_final', 'vf_coef', 'max_grad_norm']:
                     config['ppo'][key] = float(value)
                 elif key in ['n_steps', 'batch_size', 'n_epochs']:
                     config['ppo'][key] = int(value)
@@ -636,7 +636,25 @@ def train_ppo(
     
     # Setup environment (handles Colab detection, Drive mounting, etc.)
     # Use quiet mode if setup already done
-    env_info = setup_environment(verbose=not skip_setup)
+    # Skip setup entirely if we're in a subprocess (SubprocVecEnv creates subprocesses)
+    import multiprocessing
+    is_subprocess = multiprocessing.current_process().name != 'MainProcess'
+    if not is_subprocess:
+        env_info = setup_environment(verbose=not skip_setup)
+    else:
+        # In subprocess, just get basic info without verbose output
+        env_info = {
+            'is_runpod': False,
+            'is_colab': False,
+            'project_path': get_project_path(),
+            'gpu_available': False,
+        }
+        # Check GPU without printing
+        try:
+            import torch
+            env_info['gpu_available'] = torch.cuda.is_available()
+        except ImportError:
+            pass
     
     # Load configuration
     config = load_config(config_path)

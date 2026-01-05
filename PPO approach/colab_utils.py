@@ -261,6 +261,15 @@ def setup_environment(verbose: bool = True) -> dict:
     Returns:
         Dictionary with environment information
     """
+    # Skip verbose output if we're in a subprocess (SubprocVecEnv creates subprocesses)
+    import multiprocessing
+    try:
+        is_subprocess = multiprocessing.current_process().name != 'MainProcess'
+        if is_subprocess:
+            verbose = False  # Never print in subprocesses
+    except:
+        pass  # If multiprocessing check fails, continue normally
+    
     env_info = {
         'is_colab': is_colab_runtime(),
         'is_runpod': is_runpod_runtime(),

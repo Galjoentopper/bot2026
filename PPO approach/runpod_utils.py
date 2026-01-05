@@ -155,6 +155,22 @@ def verify_project_structure() -> bool:
     Returns:
         True if all required directories exist, False otherwise
     """
+    # Skip output if we're in a subprocess (SubprocVecEnv creates subprocesses)
+    import multiprocessing
+    try:
+        is_subprocess = multiprocessing.current_process().name != 'MainProcess'
+        if is_subprocess:
+            # In subprocess, just verify silently
+            project_path = get_project_path()
+            required_dirs = ['PPO approach', 'models', 'scalers', 'datasets']
+            for dir_name in required_dirs:
+                dir_path = project_path / dir_name
+                if not dir_path.exists():
+                    return False
+            return True
+    except:
+        pass  # If multiprocessing check fails, continue normally
+    
     project_path = get_project_path()
     
     required_dirs = [
@@ -205,6 +221,15 @@ def setup_environment(verbose: bool = True) -> dict:
     Returns:
         Dictionary with environment information
     """
+    # Skip verbose output if we're in a subprocess (SubprocVecEnv creates subprocesses)
+    import multiprocessing
+    try:
+        is_subprocess = multiprocessing.current_process().name != 'MainProcess'
+        if is_subprocess:
+            verbose = False  # Never print in subprocesses
+    except:
+        pass  # If multiprocessing check fails, continue normally
+    
     env_info = {
         'is_runpod': is_runpod_runtime(),
         'is_colab': False,
