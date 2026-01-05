@@ -812,6 +812,7 @@ try:
         timesteps=ppo_config['training']['total_timesteps'],
         config_path=str(ppo_config_path) if ppo_config_path.exists() else None,
         resume=True,  # Resume from checkpoint if exists
+        skip_setup=True,  # Skip verbose setup - already done in steps 1-6
     )
     
     if model is not None:

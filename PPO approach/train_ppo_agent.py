@@ -614,6 +614,7 @@ def train_ppo(
     resume: bool = True,
     checkpoint_dir: str = None,
     skip_validation: bool = False,
+    skip_setup: bool = False,  # Skip verbose setup if already done by caller
 ):
     """
     Main training function.
@@ -625,13 +626,16 @@ def train_ppo(
         config_path: Path to configuration file
         resume: Whether to resume from checkpoint
         checkpoint_dir: Directory for checkpoints
+        skip_setup: If True, skip verbose environment setup (already done by caller)
     """
-    print("=" * 60)
-    print("PPO TRADING AGENT TRAINING")
-    print("=" * 60)
+    if not skip_setup:
+        print("=" * 60)
+        print("PPO TRADING AGENT TRAINING")
+        print("=" * 60)
     
     # Setup environment (handles Colab detection, Drive mounting, etc.)
-    env_info = setup_environment()
+    # Use quiet mode if setup already done
+    env_info = setup_environment(verbose=not skip_setup)
     
     # Load configuration
     config = load_config(config_path)
