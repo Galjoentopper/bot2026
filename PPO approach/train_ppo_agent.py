@@ -665,6 +665,7 @@ def train_ppo(
     # Pre-training reward improvement test: Quick 50K step test to verify reward improvements
     # This test verifies that the reward improvements (buying action bonuses, deferred costs) are working
     run_reward_test = True  # Enable by default to verify improvements
+    run_validation = False  # Legacy validation test (disabled, using reward improvement test instead)
     
     print("\n" + "=" * 60)
     
