@@ -80,6 +80,14 @@ def run_reward_improvement_test(
     print("  - Reward components working correctly")
     print("This will take ~2-3 minutes.")
     
+    # Debug: Print reward config to verify it's loaded
+    print("\nReward Configuration:")
+    print(f"  profit_scale: {reward_config.get('profit_scale', 'NOT SET')}")
+    print(f"  buy_action_bonus: {reward_config.get('buy_action_bonus', 'NOT SET')}")
+    print(f"  sell_action_bonus: {reward_config.get('sell_action_bonus', 'NOT SET')}")
+    print(f"  open_position_cost_ratio: {reward_config.get('open_position_cost_ratio', 'NOT SET')}")
+    print(f"  reward_clip_value: {reward_config.get('reward_clip_value', 'NOT SET')}")
+    
     try:
         from trading_env import TradingEnv
         from ppo_trading_agent import create_ppo_agent
@@ -468,13 +476,26 @@ def load_config(config_path: str = None) -> Dict:
             'max_grad_norm': 0.5,
         },
         'reward': {
-            'profit_scale': 100,
+            'profit_scale': 250,
             'cost_scale': 1.0,
-            'drawdown_penalty': 0.1,
-            'sharpe_bonus': 0.5,
-            'enable_hold_penalty': False,
+            'drawdown_penalty': 0.05,
+            'sharpe_bonus': 1.5,
+            'enable_hold_penalty': True,
             'hold_penalty': 0.01,
             'max_hold_periods': 100,
+            'invalid_action_penalty': -1.0,
+            'clip_reward': True,
+            'reward_clip_value': 20.0,
+            'enable_profit_threshold_bonus': True,
+            'profit_threshold': 0.05,
+            'profit_threshold_bonus': 5.0,
+            'enable_inaction_penalty': True,
+            'inaction_penalty': 0.03,
+            'buy_action_bonus': 0.75,
+            'sell_action_bonus': 0.25,
+            'open_position_cost_ratio': 0.5,
+            'max_drawdown_threshold': 0.1,
+            'min_periods_for_sharpe': 10,
         },
         'training': {
             'total_timesteps': 1000000,
@@ -525,14 +546,24 @@ def load_config(config_path: str = None) -> Dict:
         if 'REWARD' in parser:
             for key in parser['REWARD']:
                 value = parser['REWARD'][key]
-                if key in ['enable_hold_penalty', 'enable_profit_threshold_bonus']:
+                # Boolean flags
+                if key in ['enable_hold_penalty', 'enable_profit_threshold_bonus', 
+                          'enable_inaction_penalty', 'clip_reward']:
                     config['reward'][key] = value.lower() == 'true'
+                # Float values
                 elif key in ['profit_scale', 'cost_scale', 'drawdown_penalty', 
                             'sharpe_bonus', 'hold_penalty', 'profit_threshold', 
-                            'profit_threshold_bonus']:
+                            'profit_threshold_bonus', 'invalid_action_penalty',
+                            'reward_clip_value', 'max_drawdown_threshold',
+                            'buy_action_bonus', 'sell_action_bonus', 
+                            'open_position_cost_ratio', 'inaction_penalty']:
                     config['reward'][key] = float(value)
-                elif key == 'max_hold_periods':
+                # Integer values
+                elif key in ['max_hold_periods', 'min_periods_for_sharpe']:
                     config['reward'][key] = int(value)
+                # String values (keep as-is)
+                else:
+                    config['reward'][key] = value
         
         if 'TRAINING' in parser:
             for key in parser['TRAINING']:
