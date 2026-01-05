@@ -9,22 +9,39 @@ import sys
 import json
 from pathlib import Path
 import subprocess
+import multiprocessing
 
 # PyTorch handles GPU detection automatically - no manual setup needed!
 # CUDA_VISIBLE_DEVICES can still be set if needed
 if 'CUDA_VISIBLE_DEVICES' not in os.environ:
     os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # Ensure GPU 0 is visible
 
-# ============================================
-# STEP 1: Setup Paths
-# ============================================
-print("=" * 60)
-print("STEP 1: Setting up paths...")
-print("=" * 60)
+# Guard to prevent duplicate execution when SubprocVecEnv creates subprocesses
+# Check if we're in a multiprocessing subprocess
+try:
+    _IS_SUBPROCESS = (multiprocessing.current_process().name != 'MainProcess')
+except:
+    _IS_SUBPROCESS = False
+
+# Only execute setup steps if this is the main script (not imported, not in subprocess)
+# When SubprocVecEnv forks subprocesses, they inherit parent's state but shouldn't re-run setup
+_SKIP_SETUP = (__name__ != '__main__' or _IS_SUBPROCESS)
+
+# Helper function to conditionally print STEP messages
+def _print_step(step_num, step_name):
+    """Print step header only if not in subprocess."""
+    if not _SKIP_SETUP:
+        print("=" * 60)
+        print(f"STEP {step_num}: {step_name}")
+        print("=" * 60)
 
 # CONFIGURATION: Set your dataset name here
 # Can be overridden via environment variable DATASET_NAME
 DATASET_NAME = os.environ.get('DATASET_NAME', "ADA-EUR_1H_20240101-20251231")
+
+# Only execute setup steps if not skipped
+if not _SKIP_SETUP:
+    _print_step(1, "Setting up paths...")
 
 # Use runpod_utils for path detection
 try:
@@ -102,9 +119,7 @@ print(f"✓ Current directory: {os.getcwd()}")
 # ============================================
 # STEP 2: Verify/Install Dependencies
 # ============================================
-print("\n" + "=" * 60)
-print("STEP 2: Verifying dependencies...")
-print("=" * 60)
+_print_step(2, "Verifying dependencies...")
 
 # Check if requirements.txt exists and install from it
 requirements_file = PROJECT_PATH / 'requirements.txt'
@@ -184,9 +199,7 @@ except ImportError:
 # ============================================
 # STEP 3: Verify GPU
 # ============================================
-print("\n" + "=" * 60)
-print("STEP 3: Verifying GPU...")
-print("=" * 60)
+_print_step(3, "Verifying GPU...")
 
 import torch
 
@@ -205,9 +218,7 @@ else:
 # ============================================
 # STEP 4: Verify Dataset
 # ============================================
-print("\n" + "=" * 60)
-print("STEP 4: Verifying dataset...")
-print("=" * 60)
+_print_step(4, "Verifying dataset...")
 
 import pandas as pd
 
@@ -274,9 +285,7 @@ except Exception as e:
 # ============================================
 # STEP 5: Train Prediction Models
 # ============================================
-print("\n" + "=" * 60)
-print("STEP 5: Training prediction models...")
-print("=" * 60)
+_print_step(5, "Training prediction models...")
 
 from train_models import train_all_models, load_config
 
@@ -693,9 +702,7 @@ else:
 # ============================================
 # STEP 6: Validate Models Before PPO Training
 # ============================================
-print("\n" + "=" * 60)
-print("STEP 6: Validating models before PPO training...")
-print("=" * 60)
+_print_step(6, "Validating models before PPO training...")
 
 import numpy as np
 
@@ -773,9 +780,7 @@ print("\n✓ Model validation completed - ready for PPO training")
 # ============================================
 # STEP 7: Train PPO Agent
 # ============================================
-print("\n" + "=" * 60)
-print("STEP 7: Training PPO agent...")
-print("=" * 60)
+_print_step(7, "Training PPO agent...")
 
 # Change to PPO approach directory
 ppo_path = get_ppo_path()
@@ -1006,8 +1011,9 @@ else:
 # ============================================
 # Pipeline completed successfully - explicit exit
 # ============================================
-print("\n" + "=" * 60)
-print("Pipeline completed successfully. Exiting...")
-print("=" * 60)
+if not _SKIP_SETUP:
+    print("\n" + "=" * 60)
+    print("Pipeline completed successfully. Exiting...")
+    print("=" * 60)
 sys.exit(0)
 
