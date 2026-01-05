@@ -68,7 +68,24 @@ class RewardConfig:
     @classmethod
     def from_dict(cls, config: Dict) -> 'RewardConfig':
         """Create config from dictionary."""
-        return cls(**{k: v for k, v in config.items() if hasattr(cls, k)})
+        # Convert string values to appropriate types
+        converted_config = {}
+        for k, v in config.items():
+            if hasattr(cls, k):
+                # Convert string values to appropriate types
+                if isinstance(v, str):
+                    # Try to convert to float if it's a numeric string
+                    try:
+                        if '.' in v or 'e' in v.lower():
+                            converted_config[k] = float(v)
+                        else:
+                            converted_config[k] = int(v)
+                    except ValueError:
+                        # Keep as string if conversion fails
+                        converted_config[k] = v
+                else:
+                    converted_config[k] = v
+        return cls(**converted_config)
 
 
 class RewardCalculator:

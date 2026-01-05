@@ -54,14 +54,14 @@ def test_reward_scenarios():
     
     # Test 1: Opening a position
     print("\n" + "-" * 70)
-    print("TEST 1: Opening a Position (Buy Small - 25%)")
+    print("TEST 1: Opening a Position (Buy - 100% of cash)")
     print("-" * 70)
     obs, info = env.reset()
     initial_equity = env.portfolio.state.total_equity
     print(f"Initial equity: {initial_equity:.2f}")
     
     # Open position
-    action = 1  # Buy Small
+    action = 1  # Buy (100% of available cash)
     obs, reward, terminated, truncated, info = env.step(action)
     
     current_equity = env.portfolio.state.total_equity
@@ -69,7 +69,7 @@ def test_reward_scenarios():
     num_closed_trades = len(env.portfolio.trades)
     has_open_trade = env.portfolio.current_trade is not None
     
-    print(f"Action: {action} (Buy Small)")
+    print(f"Action: {action} (Buy)")
     print(f"Reward: {reward:.6f}")
     print(f"Equity change: {current_equity - initial_equity:.2f}")
     print(f"Position: {position:.2f}")
@@ -139,7 +139,7 @@ def test_reward_scenarios():
     previous_equity = current_equity
     previous_trades = len(env.portfolio.trades)
     
-    action = 7  # Close Position
+    action = 3  # Close Position (new action space: 0=Hold, 1=Buy, 2=Sell, 3=Close)
     obs, reward, terminated, truncated, info = env.step(action)
     
     current_equity = env.portfolio.state.total_equity
@@ -214,7 +214,7 @@ def test_reward_scenarios():
     episode_length = 0
     
     for _ in range(10):  # Should end after 5 steps
-        action = np.random.randint(0, 9)  # Random action
+        action = np.random.randint(0, 4)  # Random action (new action space: 0-3)
         obs, reward, terminated, truncated, info = test_env.step(action)
         episode_reward += reward
         episode_length += 1

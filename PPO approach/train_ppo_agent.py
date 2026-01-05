@@ -54,7 +54,7 @@ def run_reward_improvement_test(
     
     This test verifies:
     - Rewards can go positive (max reward > 0)
-    - Buying actions (1-3) are being used (>1% each)
+    - Buying action (1) is being used (>1%)
     - Reward components are working (opening vs closing bonuses)
     - Mean return is improving toward positive
     
@@ -498,7 +498,8 @@ def load_config(config_path: str = None) -> Dict:
             'max_hold_periods': 100,
             'invalid_action_penalty': -1.0,
             'clip_reward': True,
-            'reward_clip_value': 20.0,
+            'reward_clip_value': 30.0,
+            'min_reward_floor': -0.1,
             'enable_profit_threshold_bonus': True,
             'profit_threshold': 0.05,
             'profit_threshold_bonus': 5.0,
@@ -569,7 +570,8 @@ def load_config(config_path: str = None) -> Dict:
                             'profit_threshold_bonus', 'invalid_action_penalty',
                             'reward_clip_value', 'max_drawdown_threshold',
                             'buy_action_bonus', 'sell_action_bonus', 
-                            'open_position_cost_ratio', 'inaction_penalty']:
+                            'open_position_cost_ratio', 'inaction_penalty',
+                            'min_reward_floor']:
                     config['reward'][key] = float(value)
                 # Integer values
                 elif key in ['max_hold_periods', 'min_periods_for_sharpe']:
