@@ -178,8 +178,15 @@ def run_reward_improvement_test(
         reward_stats = reward_callback.get_stats()
         mean_reward = reward_stats.get('mean_reward', 0)
         std_reward = reward_stats.get('std_reward', 0)
-        max_reward = reward_stats.get('max_reward', 0)
-        min_reward = reward_stats.get('min_reward', 0)
+        
+        # Get episode rewards directly to calculate min/max
+        episode_rewards = reward_callback.episode_rewards if hasattr(reward_callback, 'episode_rewards') else []
+        if episode_rewards:
+            max_reward = np.max(episode_rewards)
+            min_reward = np.min(episode_rewards)
+        else:
+            max_reward = 0
+            min_reward = 0
         
         # Get episode returns if available
         episode_returns = reward_callback.episode_returns if hasattr(reward_callback, 'episode_returns') else []
