@@ -38,3 +38,6 @@
 2026-01-05 07:57:12,283 - runpod_main - INFO - Starting training pipeline...
 2026-01-05 07:57:12,283 - runpod_main - INFO - ============================================================
 2026-01-05 07:57:12,283 - runpod_main - INFO - Executing training script...
+2026-01-05 08:01:01,360 - runpod_main - INFO - ============================================================
+2026-01-05 08:01:01,361 - runpod_main - INFO - Training pipeline completed successfully!
+2026-01-05 08:01:01,362 - runpod_main - INFO - ============================================================
