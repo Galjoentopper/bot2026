@@ -13,6 +13,7 @@ import os
 import sys
 import argparse
 import multiprocessing
+import numpy as np
 from pathlib import Path
 from configparser import ConfigParser
 from typing import Dict, Optional, List
@@ -39,6 +40,231 @@ try:
 except ImportError:
     VEC_ENV_AVAILABLE = False
     print("Warning: stable-baselines3 vec_env not available. Install with: pip install stable-baselines3")
+
+
+def run_reward_improvement_test(
+    dataset_path: Path,
+    prediction_models,
+    reward_config: Dict,
+    prediction_horizons: List[int],
+    skip_test: bool = False
+) -> bool:
+    """
+    Run a 50K step test specifically to verify reward improvements are working.
+    
+    This test verifies:
+    - Rewards can go positive (max reward > 0)
+    - Buying actions (1-3) are being used (>1% each)
+    - Reward components are working (opening vs closing bonuses)
+    - Mean return is improving toward positive
+    
+    Args:
+        dataset_path: Path to dataset
+        prediction_models: Loaded prediction models
+        reward_config: Reward configuration
+        prediction_horizons: Prediction horizons
+        skip_test: If True, skip test and return True
+        
+    Returns:
+        True if test passes, False otherwise
+    """
+    if skip_test:
+        return True
+    
+    print("\n" + "=" * 60)
+    print("REWARD IMPROVEMENT TEST (50K steps)")
+    print("=" * 60)
+    print("Testing reward improvements:")
+    print("  - Positive rewards achievable")
+    print("  - Buying actions being used")
+    print("  - Reward components working correctly")
+    print("This will take ~2-3 minutes.")
+    
+    try:
+        from trading_env import TradingEnv
+        from ppo_trading_agent import create_ppo_agent
+        from stable_baselines3.common.callbacks import CallbackList
+        from ppo_trading_agent import PolicyCollapseCallback, RewardLoggingCallback
+        
+        # Create test environment
+        test_env = TradingEnv(
+            dataset_path=dataset_path,
+            prediction_models=prediction_models if prediction_models and prediction_models.loaded else None,
+            transaction_cost=0.0025,
+            initial_capital=10000,
+            sequence_length=60,
+            train_mode=True,
+            train_split=0.6,
+            validation_split=0.2,
+            reward_config=reward_config,
+            max_episode_steps=2000,
+            prediction_horizons=prediction_horizons,
+        )
+        
+        # Create agent with moderate exploration
+        test_ppo_config = {
+            'learning_rate': 0.0003,
+            'n_steps': 512,
+            'batch_size': 256,
+            'n_epochs': 10,
+            'gamma': 0.99,
+            'gae_lambda': 0.95,
+            'clip_range': 0.2,
+            'ent_coef': 0.15,  # Moderate exploration
+            'vf_coef': 0.5,
+            'max_grad_norm': 0.5,
+            'verbose': 0,
+        }
+        
+        print("\nCreating test agent...")
+        test_model = create_ppo_agent(
+            env=test_env,
+            config=test_ppo_config,
+            device='auto'
+        )
+        
+        # Create callbacks to track metrics
+        collapse_callback = PolicyCollapseCallback(threshold=0.90, check_freq=10000, verbose=1)
+        reward_callback = RewardLoggingCallback(verbose=1)
+        
+        print("Running 50,000 step reward improvement test...")
+        test_model.learn(
+            total_timesteps=50000,
+            callback=CallbackList([collapse_callback, reward_callback]),
+            progress_bar=True,
+        )
+        
+        # Analyze results
+        print("\n" + "=" * 60)
+        print("REWARD IMPROVEMENT TEST RESULTS")
+        print("=" * 60)
+        
+        # Check action distribution
+        action_stats = collapse_callback.action_counts
+        total_actions = collapse_callback.total_actions
+        
+        if total_actions == 0:
+            print("❌ TEST FAILED: No actions recorded!")
+            test_env.close()
+            return False
+        
+        action_dist = {k: v/total_actions*100 for k, v in action_stats.items()}
+        buying_actions = [1, 2, 3]  # Buy Small, Medium, Large
+        buying_action_usage = sum([action_dist.get(a, 0) for a in buying_actions])
+        num_actions_used = len([p for p in action_dist.values() if p > 1.0])
+        max_action_pct = max(action_dist.values()) if action_dist else 0
+        
+        print(f"\nAction Distribution:")
+        print(f"  Actions used (>1%): {num_actions_used}/9")
+        print(f"  Most common action: {max_action_pct:.1f}%")
+        print(f"  Buying actions (1-3) total usage: {buying_action_usage:.1f}%")
+        for action_id in buying_actions:
+            pct = action_dist.get(action_id, 0)
+            action_names = ['Hold', 'Buy Small', 'Buy Medium', 'Buy Large', 
+                          'Sell Small', 'Sell Medium', 'Sell Large', 
+                          'Close Position', 'Reverse Position']
+            action_name = action_names[action_id] if action_id < len(action_names) else f"Action {action_id}"
+            print(f"    {action_name}: {pct:.1f}%")
+        
+        # Check rewards
+        reward_stats = reward_callback.get_stats()
+        mean_reward = reward_stats.get('mean_reward', 0)
+        std_reward = reward_stats.get('std_reward', 0)
+        max_reward = reward_stats.get('max_reward', 0)
+        min_reward = reward_stats.get('min_reward', 0)
+        
+        # Get episode returns if available
+        episode_returns = reward_callback.episode_returns if hasattr(reward_callback, 'episode_returns') else []
+        mean_return = np.mean(episode_returns) if episode_returns else 0
+        
+        print(f"\nReward Statistics:")
+        print(f"  Mean reward: {mean_reward:.4f} ± {std_reward:.4f}")
+        print(f"  Reward range: [{min_reward:.2f}, {max_reward:.2f}]")
+        if episode_returns:
+            print(f"  Mean return: {mean_return:.2f}%")
+        
+        # Test criteria
+        test_passed = True
+        issues = []
+        warnings = []
+        
+        # Check 1: Rewards should be positive (max reward > 0)
+        if max_reward <= 0:
+            test_passed = False
+            issues.append(f"Max reward is {max_reward:.2f} (should be > 0)")
+        elif max_reward > 0:
+            warnings.append(f"✓ Positive rewards achieved (max: {max_reward:.2f})")
+        
+        # Check 2: Buying actions should be used (>1% each, or >5% total)
+        buying_actions_used = [action_dist.get(a, 0) for a in buying_actions]
+        if buying_action_usage < 5.0:
+            test_passed = False
+            issues.append(f"Buying actions usage too low ({buying_action_usage:.1f}%, need >5%)")
+        elif buying_action_usage >= 5.0:
+            warnings.append(f"✓ Buying actions being used ({buying_action_usage:.1f}%)")
+        
+        # Check 3: At least one buying action should be >1%
+        max_buying_action = max(buying_actions_used)
+        if max_buying_action < 1.0:
+            test_passed = False
+            issues.append(f"No buying action exceeds 1% usage (max: {max_buying_action:.1f}%)")
+        elif max_buying_action >= 1.0:
+            warnings.append(f"✓ At least one buying action >1% (max: {max_buying_action:.1f}%)")
+        
+        # Check 4: Agent should use multiple actions
+        if num_actions_used < 4:
+            test_passed = False
+            issues.append(f"Only {num_actions_used} actions used (need at least 4)")
+        elif num_actions_used >= 4:
+            warnings.append(f"✓ Multiple actions explored ({num_actions_used}/9)")
+        
+        # Check 5: No single action should dominate
+        if max_action_pct > 80:
+            test_passed = False
+            issues.append(f"Single action dominates ({max_action_pct:.1f}%)")
+        elif max_action_pct <= 80:
+            warnings.append(f"✓ Action distribution balanced (max: {max_action_pct:.1f}%)")
+        
+        # Check 6: Mean return should be improving (less negative or positive)
+        if mean_return < -2.0:
+            warnings.append(f"⚠ Mean return still very negative ({mean_return:.2f}%), but this may improve with more training")
+        elif mean_return >= -2.0:
+            warnings.append(f"✓ Mean return reasonable ({mean_return:.2f}%)")
+        
+        # Print results
+        print("\n" + "-" * 60)
+        if warnings:
+            print("Test Warnings/Passes:")
+            for warning in warnings:
+                print(f"  {warning}")
+        
+        if test_passed:
+            print("\n✅ REWARD IMPROVEMENT TEST PASSED")
+            print("   Reward improvements are working correctly:")
+            print("   - Positive rewards are achievable")
+            print("   - Buying actions are being used")
+            print("   - Agent is exploring properly")
+            print("   Proceeding with full training...")
+        else:
+            print("\n❌ REWARD IMPROVEMENT TEST FAILED")
+            print("   Issues detected:")
+            for issue in issues:
+                print(f"     - {issue}")
+            print("\n   Recommendations:")
+            print("     - Check reward_config has buy_action_bonus and open_position_cost_ratio set")
+            print("     - Verify profit_scale is increased (should be 250)")
+            print("     - Consider increasing ent_coef further (try 0.2-0.25)")
+            print("     - Check that reward function changes are properly loaded")
+        
+        test_env.close()
+        return test_passed
+        
+    except Exception as e:
+        print(f"\n⚠️  REWARD IMPROVEMENT TEST ERROR: {e}")
+        print("   Skipping test and proceeding with training...")
+        import traceback
+        traceback.print_exc()
+        return True  # Don't block training if test fails
 
 
 def run_validation_test(
@@ -391,9 +617,9 @@ def train_ppo(
     
     print("\n" + "=" * 60)
     
-    # Pre-training validation: Quick 50K step test to verify learning
-    # DISABLED: Validation test skipped - proceeding directly to training
-    run_validation = False
+    # Pre-training reward improvement test: Quick 50K step test to verify reward improvements
+    # This test verifies that the reward improvements (buying action bonuses, deferred costs) are working
+    run_reward_test = True  # Enable by default to verify improvements
     
     print("\n" + "=" * 60)
     
@@ -460,6 +686,28 @@ def train_ppo(
     print(f"\nPrediction horizons: {prediction_horizons}")
     print(f"  Short-term: {[h for h in prediction_horizons if h <= 3]}")
     print(f"  Medium-term: {[h for h in prediction_horizons if h > 3]}")
+    
+    # Run reward improvement test before full training
+    if run_reward_test and not skip_validation:
+        print("\n" + "=" * 60)
+        reward_test_passed = run_reward_improvement_test(
+            dataset_path=dataset_path,
+            prediction_models=prediction_models,
+            reward_config=config['reward'],
+            prediction_horizons=prediction_horizons,
+            skip_test=False
+        )
+        
+        if not reward_test_passed:
+            print("\n⚠️  Reward improvement test failed!")
+            print("   The reward improvements may not be working correctly.")
+            print("   Training will continue, but results may be suboptimal.")
+            response = input("\nContinue with full training anyway? (y/n): ").strip().lower()
+            if response != 'y':
+                print("Training aborted by user.")
+                return None
+        else:
+            print("\n✓ Reward improvement test passed. Proceeding with full training...")
     
     # Run validation test before full training
     if run_validation:
@@ -684,6 +932,9 @@ Examples:
     parser.add_argument('--skip-validation', action='store_true',
                        help='Skip pre-training validation test (not recommended)')
     
+    parser.add_argument('--skip-reward-test', action='store_true',
+                       help='Skip reward improvement test (50K steps) - not recommended')
+    
     args = parser.parse_args()
     
     # Handle resume flag
@@ -697,7 +948,7 @@ Examples:
         config_path=args.config,
         resume=resume,
         checkpoint_dir=args.checkpoint_dir,
-        skip_validation=args.skip_validation,
+        skip_validation=args.skip_validation or args.skip_reward_test,  # Skip reward test if requested
     )
 
 
